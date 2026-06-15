@@ -55,16 +55,16 @@ export default function ScanScreen({
       <div className="gallery-glow gallery-glow-primary scan-intro-chrome" aria-hidden="true" />
       <div className="gallery-glow gallery-glow-secondary scan-intro-chrome" aria-hidden="true" />
 
-      <header className="scan-header scan-intro-chrome">
-        <button type="button" className="detail-back-btn" onClick={onClose} disabled={handoffInFlight}>
-          ← Back
-        </button>
-        <p className="gallery-eyebrow scan-eyebrow">Plankton Atlas</p>
-        <h2 className="scan-title">Specimen scan</h2>
-      </header>
-
       <div className="scan-result-layout">
         <aside className="scan-result-panel scan-intro-chrome">
+          <button
+            type="button"
+            className="detail-back-btn scan-result-back"
+            onClick={onClose}
+            disabled={handoffInFlight}
+          >
+            ← Back
+          </button>
           <div className="detail-panel scan-result-info">
             <p className="gallery-eyebrow detail-eyebrow">Match found</p>
             <h1 className="detail-species-name">{scanSpecimen.name}</h1>

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import PlanktonScene from "./PlanktonScene";
 import SplinePlanktonViewer from "./SplinePlanktonViewer";
+import { getPlanktonSplineZoomScale } from "../utils/planktonSplineZoom";
 
 export default function PlanktonSearchThumb({ plankton }) {
   if (plankton.viewer === "spline") {
@@ -12,14 +13,16 @@ export default function PlanktonSearchThumb({ plankton }) {
       >
         <div
           className="gallery-search-result-thumb-spline-stage"
-          style={{ "--spline-thumb-scale": 0.075 }}
+          style={{
+            "--spline-thumb-scale": plankton.searchThumbScale ?? 0.075,
+          }}
         >
           <SplinePlanktonViewer
             url={plankton.splineUrl}
             viewerSrc={plankton.splineViewer}
             className="gallery-search-result-thumb-spline"
             previewSize={{ width: 480, height: 628 }}
-            zoomScale={1.1}
+            zoomScale={getPlanktonSplineZoomScale(plankton, { context: "search" })}
           />
         </div>
       </div>

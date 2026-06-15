@@ -23,6 +23,7 @@ export default function App() {
   const [scanResultOpen, setScanResultOpen] = useState(false);
   const [scanExiting, setScanExiting] = useState(false);
   const [galleryFocusId, setGalleryFocusId] = useState(null);
+  const [galleryRestoreId, setGalleryRestoreId] = useState(null);
   const [handoffStartRect, setHandoffStartRect] = useState(null);
   const [handoffLanding, setHandoffLanding] = useState(false);
   const [specimenDocked, setSpecimenDocked] = useState(false);
@@ -42,6 +43,11 @@ export default function App() {
     },
     [collection],
   );
+
+  const handleSelectPlankton = useCallback((id) => {
+    setGalleryRestoreId(id);
+    setSelectedId(id);
+  }, []);
 
   const finishReturnHome = useCallback(() => {
     setScanResultOpen(false);
@@ -97,15 +103,26 @@ export default function App() {
   const showGallery = !selectedPlankton;
   const galleryConcealed = scanResultOpen && !scanExiting;
   const showHandoffLayer = scanResultOpen || (specimenDocked && !selectedPlankton);
+  const galleryFocusPlanktonId = galleryFocusId ?? galleryRestoreId;
+
+  useEffect(() => {
+    if (!showGallery || galleryFocusId || !galleryRestoreId) return undefined;
+
+    const frame = requestAnimationFrame(() => {
+      setGalleryRestoreId(null);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [showGallery, galleryFocusId, galleryRestoreId]);
 
   return (
     <div className="app-stage">
       {showGallery ? (
         <HomeScreen
           collection={collection}
-          onSelect={setSelectedId}
+          onSelect={handleSelectPlankton}
           onScanComplete={handleScanComplete}
-          focusPlanktonId={galleryFocusId}
+          focusPlanktonId={galleryFocusPlanktonId}
           handoffActive={handoffActive || handoffLanding}
           galleryDockRef={galleryDockRef}
           specimenDocked={specimenDocked}

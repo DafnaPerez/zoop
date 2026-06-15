@@ -5,18 +5,17 @@ export const scanSpecimen = {
   id: "belzebub-hanseni",
   name: "Belzebub hanseni",
   taxonomy: "Luciferid shrimp",
-  habitat:
-    "Indo-West Pacific; also introduced to the eastern Mediterranean. Common in coastal, shallow, and mangrove-associated waters.",
+  habitat: "Indo-West Pacific, eastern Mediterranean.",
   size: "9–12 mm as an adult.",
   scaleMaxMm: 12,
   detailSections: [
     {
       label: "Appearance",
-      text: "Very small, transparent, elongated shrimp-like crustacean. Body is laterally compressed, with conspicuous dark stalked eyes, a narrow anterior region, delicate appendages, and a reduced, modified shrimp form.",
+      text: "Tiny transparent shrimp-like body with dark stalked eyes and delicate appendages.",
     },
     {
       label: "Ecology",
-      text: "Marine and brackish planktonic shrimp. Known for bioluminescence: luciferid shrimps are named after their light-producing ability, and their transparent bodies make this luminous quality especially visually striking.",
+      text: "Known for bioluminescence: luciferid shrimps are named after their light-producing ability.",
     },
   ],
   viewer: "spline",

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200" fill="none">
+  <rect width="320" height="200" fill="#020810"/>
+  <g stroke="#7dd3fc" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.82">
+    <path d="M48 118c18-34 44-52 78-52 28 0 52 12 68 34 10 14 14 30 12 46-2 18-12 34-28 44-16 10-36 14-56 10-24-4-44-18-56-38-6-10-8-22-6-34 2-12 8-22 18-30"/>
+    <path d="M126 66c-8-18-4-34 10-44 8-6 18-8 28-6"/>
+    <path d="M154 58c6-14 18-22 34-22"/>
+    <circle cx="118" cy="72" r="5" fill="#0f172a" stroke="#bae6fd"/>
+    <circle cx="142" cy="68" r="4.5" fill="#0f172a" stroke="#bae6fd"/>
+    <path d="M86 118c-10 8-16 18-18 30M92 124l-18 10M98 130l-14 16"/>
+    <path d="M214 118c8 10 12 22 10 34M208 124l16 8M202 130l12 14"/>
+    <path d="M168 146c12 4 24 4 36 0"/>
+  </g>
+  <g stroke="#38bdf8" stroke-width="0.8" opacity="0.35">
+    <path d="M24 24h272M24 176h272M24 24v152M296 24v152"/>
+    <path d="M24 100h272M160 24v152"/>
+  </g>
+  <text x="24" y="188" fill="#64748b" font-family="monospace" font-size="9" letter-spacing="1.2">FIELD SCAN ù BH-01</text>
+</svg>

@@ -1053,6 +1053,11 @@ body {
   will-change: transform;
 }
 
+.detail-model-viewport {
+  position: absolute;
+  inset: 0;
+}
+
 @keyframes detail-specimen-float {
   0%,
   100% {
@@ -1297,7 +1302,8 @@ body {
   display: flex;
   flex-direction: column;
   width: 100vw;
-  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   background:
     radial-gradient(ellipse 70% 55% at 50% 58%, rgba(8, 47, 73, 0.45), transparent 68%),
@@ -1305,7 +1311,6 @@ body {
   color: #e2e8f0;
 }
 
-.scan-screen .scan-result-panel,
 .scan-screen .scan-result-model {
   margin-top: -40px;
 }
@@ -1450,7 +1455,6 @@ body {
   pointer-events: none;
 }
 
-.scan-screen--handoff .scan-header,
 .scan-screen--handoff .scan-result-panel,
 .scan-screen--handoff .scan-footer,
 .scan-screen--handoff .detail-model-glow,
@@ -1466,49 +1470,39 @@ body {
   }
 }
 
-.scan-header {
-  position: relative;
-  z-index: 2;
-  padding: clamp(20px, 3vw, 36px) clamp(20px, 3vw, 36px) 12px;
-}
-
-.scan-header .detail-back-btn {
-  margin-bottom: 18px;
-}
-
-.scan-eyebrow {
-  margin: 0 0 8px;
-  text-align: center;
-}
-
-.scan-title {
-  margin: 0;
-  font-family: RobotoMono, monospace;
-  font-size: clamp(1.2rem, 2.2vw, 1.6rem);
-  font-weight: 400;
-  text-align: center;
-  letter-spacing: -0.02em;
-  color: #f8fafc;
-}
-
 .scan-result-layout {
   position: relative;
   z-index: 2;
-  flex: 1;
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(220px, 320px) 1fr;
-  gap: clamp(16px, 2.5vw, 32px);
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px clamp(16px, 2.5vw, 32px);
+  align-items: stretch;
   min-height: 0;
-  padding: 8px clamp(20px, 3vw, 36px) 28px;
+  overflow: hidden;
+  padding: clamp(20px, 3vw, 36px) clamp(20px, 3vw, 36px) 12px;
 }
 
 .scan-result-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
   min-height: 0;
+  height: 100%;
+  padding-top: 4px;
+  overflow: hidden;
+}
+
+.scan-result-back {
+  align-self: start;
+  justify-self: start;
 }
 
 .scan-result-info {
-  height: 100%;
-  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
 }
 
 .scan-dropzone {
@@ -1643,14 +1637,14 @@ body {
 }
 
 .scan-source-panel {
-  margin: 22px 0 0;
-  padding-top: 18px;
+  margin: 18px 0 0;
+  padding-top: 14px;
   border-top: 1px solid rgba(186, 230, 253, 0.16);
 }
 
 .scan-source-panel figcaption {
-  margin: 0 0 10px;
-  font-size: 11px;
+  margin: 0 0 8px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(186, 230, 253, 0.58);
@@ -1658,8 +1652,9 @@ body {
 
 .scan-source-panel img {
   display: block;
-  width: 100%;
-  max-height: 160px;
+  width: 68%;
+  max-width: 168px;
+  max-height: 96px;
   object-fit: cover;
   border: 1px solid rgba(125, 211, 252, 0.28);
   background: rgba(3, 11, 20, 0.78);
@@ -1668,11 +1663,11 @@ body {
 .scan-footer {
   position: relative;
   z-index: 4;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: auto;
   padding: 12px clamp(20px, 3vw, 36px) var(--atlas-footer-bottom);
 }
 
@@ -1851,6 +1846,7 @@ body {
 
   .scan-result-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(180px, 34vh);
   }
 
   .scan-result-model-stage {
@@ -1888,7 +1884,6 @@ body {
   .detail-model-float,
   .gallery-search-field,
   .gallery-scan-panel,
-  .scan-screen--handoff .scan-header,
   .scan-screen--handoff .scan-result-panel,
   .scan-screen--handoff .scan-footer,
   .gallery-screen--handoff .gallery-header,

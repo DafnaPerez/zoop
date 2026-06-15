@@ -412,7 +412,7 @@ export default function PlanktonGallery({
                 zIndex: metrics.zIndex,
                 opacity: metrics.opacity,
                 filter: `blur(${metrics.blur}px)`,
-                transform: `translate(-50%, -50%) translate(${metrics.x}px, ${metrics.y}px) scale(${metrics.scale})`,
+                transform: `translate(-50%, -50%) translate(${metrics.x}px, ${metrics.y + (plankton.galleryOffsetY ?? 0)}px) scale(${metrics.scale})`,
               }}
               onClick={() => handleItemClick(index, slot)}
               aria-label={plankton.name}

@@ -24,10 +24,6 @@ function commitGalleryFraming(shell) {
   });
 }
 
-function refreshGalleryFraming(shell) {
-  applySplineFramingToHost(shell, GALLERY_SPLINE_ZOOM, true, GALLERY_FILL_FACTOR, 14);
-}
-
 const HANDOFF_MS = 2000;
 const HANDOFF_SETTLE_MS = 250;
 
@@ -132,7 +128,7 @@ export default function HandoffSpecimenLayer({
   const [introComplete, setIntroComplete] = useState(false);
 
   const handoffInFlight = handoffActive || handoffLanding;
-  const useGalleryFraming = handoffInFlight || specimenDocked;
+  const useGalleryFraming = specimenDocked || handoffLanding;
   const splineLocked = handoffInFlight || specimenDocked;
 
   useEffect(() => {
@@ -259,7 +255,7 @@ export default function HandoffSpecimenLayer({
     const shell = shellRef.current;
     shell.style.transform = "";
     stabilizeSplineForHandoff(shell);
-    commitGalleryFraming(shell);
+    clearHandoffFramingLock(shell);
 
     const sourceRect = normalizeRect(shell.getBoundingClientRect());
     if (!sourceRect.width) return;
@@ -319,7 +315,8 @@ export default function HandoffSpecimenLayer({
       } else {
         applyShellRect(shell, target);
         shell.style.transform = "";
-        refreshGalleryFraming(shell);
+        clearHandoffFramingLock(shell);
+        commitGalleryFraming(shell);
         completeHandoff();
       }
     };

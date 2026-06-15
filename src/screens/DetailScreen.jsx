@@ -103,6 +103,16 @@ export default function DetailScreen({
             <div className="detail-model-glow" aria-hidden="true" />
 
             <div className="detail-model-float">
+              <div
+                className="detail-model-viewport"
+                style={
+                  plankton.detailOffsetX != null || plankton.detailOffsetY != null
+                    ? {
+                        transform: `translate(${plankton.detailOffsetX ?? 0}px, ${plankton.detailOffsetY ?? 0}px)`,
+                      }
+                    : undefined
+                }
+              >
               {isSpline ? (
                 <SplinePlanktonViewer
                   key={plankton.id}
@@ -129,6 +139,7 @@ export default function DetailScreen({
                   </Suspense>
                 </Canvas>
               )}
+              </div>
             </div>
           </div>
 

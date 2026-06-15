@@ -1,3 +1,5 @@
+import { publicUrl } from "../utils/publicUrl";
+
 /** Scan pipeline always resolves to this specimen. */
 export const scanSpecimen = {
   id: "belzebub-hanseni",
@@ -18,8 +20,8 @@ export const scanSpecimen = {
     },
   ],
   viewer: "spline",
-  splineUrl: "/models/Belzebub_hanseni_scene_spliecode.splinecode",
-  splineViewer: "/models/Belzebub_hanseni_spline_viewer.js",
+  splineUrl: publicUrl("/models/Belzebub_hanseni_scene_spliecode.splinecode"),
+  splineViewer: publicUrl("/models/Belzebub_hanseni_spline_viewer.js"),
   scanZoomScale: 1.15,
   galleryZoomScale: 1.28,
   galleryFillFactor: 0.84,

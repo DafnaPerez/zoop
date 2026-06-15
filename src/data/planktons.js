@@ -1,3 +1,5 @@
+import { publicUrl } from "../utils/publicUrl";
+
 export const planktons = [
     {
       id: "calanus-finmarchicus",
@@ -17,11 +19,11 @@ export const planktons = [
         },
       ],
       viewer: "spline",
-      splineUrl: "/models/Calanus_finmarchicus_scene_spliecode.splinecode",
-      splineViewer: "/models/Calanus_finmarchicus_spline_viewer.js",
+      splineUrl: publicUrl("/models/Calanus_finmarchicus_scene_spliecode.splinecode"),
+      splineViewer: publicUrl("/models/Calanus_finmarchicus_spline_viewer.js"),
       detailZoomScale: 1.35,
       galleryZoomScale: 1.35,
-      sketches: ["/sketches/Calanus1.png", "/sketches/calanus2.png"],
+      sketches: [publicUrl("/sketches/Calanus1.png"), publicUrl("/sketches/calanus2.png")],
       layout: { top: "6%", left: "4%", width: "20%", zIndex: 1 },
     },
     {
@@ -32,8 +34,8 @@ export const planktons = [
       size: "Size information",
       description: "Short description about Clione limacina.",
       viewer: "spline",
-      splineUrl: "/models/Clione_limacina_scene_spliecode.splinecode",
-      splineViewer: "/models/Clione_limacina_spline_viewer.js",
+      splineUrl: publicUrl("/models/Clione_limacina_scene_spliecode.splinecode"),
+      splineViewer: publicUrl("/models/Clione_limacina_spline_viewer.js"),
       detailZoomScale: 1.35,
       galleryZoomScale: 1.35,
       layout: { top: "10%", left: "26%", width: "18%", zIndex: 2 },
@@ -45,7 +47,7 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Euphausia superba.",
-      model: "/models/Euphausia_superba.glb",
+      model: publicUrl("/models/Euphausia_superba.glb"),
       layout: { top: "6%", left: "58%", width: "22%", zIndex: 1 },
     },
     {
@@ -55,7 +57,7 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Fritillaria borealis.",
-      model: "/models/Fritillaria_borealis.glb",
+      model: publicUrl("/models/Fritillaria_borealis.glb"),
       layout: { top: "24%", left: "73%", width: "19%", zIndex: 2 },
     },
     {
@@ -65,7 +67,7 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Limacina helicina.",
-      model: "/models/Limacina_helicina.glb",
+      model: publicUrl("/models/Limacina_helicina.glb"),
       layout: { top: "33%", left: "34%", width: "22%", zIndex: 3 },
     },
     {
@@ -75,7 +77,7 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Parasagitta elegans.",
-      model: "/models/Parasagitta_elegans.glb",
+      model: publicUrl("/models/Parasagitta_elegans.glb"),
       layout: { top: "42%", left: "52%", width: "22%", zIndex: 2 },
     },
     {
@@ -85,7 +87,7 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Pleurobrachia pileus.",
-      model: "/models/Pleurobrachia_pileus.glb",
+      model: publicUrl("/models/Pleurobrachia_pileus.glb"),
       layout: { top: "52%", left: "5%", width: "21%", zIndex: 2 },
     },
     {
@@ -95,7 +97,7 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Tomopteris helgolandica.",
-      model: "/models/Tomopteris_helgolandica.glb",
+      model: publicUrl("/models/Tomopteris_helgolandica.glb"),
       layout: { top: "64%", left: "58%", width: "24%", zIndex: 1 },
     },
   ];

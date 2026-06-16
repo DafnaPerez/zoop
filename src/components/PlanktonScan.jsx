@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { preloadSplineViewerAssets } from "./SplinePlanktonViewer";
-import { scanSpecimen } from "../data/scanSpecimen";
 
 const PROCESSING_MS = 3800;
 
@@ -29,7 +27,7 @@ function ScanToggleIcon() {
   );
 }
 
-export default function PlanktonScan({ onScanComplete }) {
+export default function PlanktonScan({ onScanComplete, onExpandedChange, onScanPhaseChange }) {
   const rootRef = useRef(null);
   const inputRef = useRef(null);
   const processingTimerRef = useRef(null);
@@ -49,6 +47,10 @@ export default function PlanktonScan({ onScanComplete }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    onExpandedChange?.(expanded);
+  }, [expanded, onExpandedChange]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -92,6 +94,7 @@ export default function PlanktonScan({ onScanComplete }) {
   const resetUpload = () => {
     clearProcessingTimer();
     clearPreview();
+    onScanPhaseChange?.("idle");
     setPhase("idle");
   };
 
@@ -118,12 +121,13 @@ export default function PlanktonScan({ onScanComplete }) {
     previewUrlRef.current = previewUrl;
     setUploadPreview(previewUrl);
     setPhase("processing");
-    preloadSplineViewerAssets(scanSpecimen.splineViewer, scanSpecimen.splineUrl);
+    onScanPhaseChange?.("processing");
 
     processingTimerRef.current = window.setTimeout(() => {
       processingTimerRef.current = null;
       const completedUrl = previewUrlRef.current;
       previewUrlRef.current = null;
+      onScanPhaseChange?.("idle");
       onScanComplete(completedUrl);
       setUploadPreview(null);
       setPhase("idle");

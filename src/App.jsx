@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { planktons } from "./data/planktons";
 import { scanSpecimen } from "./data/scanSpecimen";
 import { usePreventBrowserZoom } from "./hooks/usePreventBrowserZoom";
+import { preloadSplineViewerAssets } from "./components/SplinePlanktonViewer";
 import HandoffSpecimenLayer from "./components/HandoffSpecimenLayer";
 import HomeScreen from "./screens/HomeScreen";
 import DetailScreen from "./screens/DetailScreen";
@@ -24,6 +25,9 @@ export default function App() {
   const [scanExiting, setScanExiting] = useState(false);
   const [galleryFocusId, setGalleryFocusId] = useState(null);
   const [galleryRestoreId, setGalleryRestoreId] = useState(null);
+  const [scanPanelOpen, setScanPanelOpen] = useState(false);
+  const [scanProcessing, setScanProcessing] = useState(false);
+  const [galleryGpuEpoch, setGalleryGpuEpoch] = useState(0);
   const [handoffStartRect, setHandoffStartRect] = useState(null);
   const [handoffLanding, setHandoffLanding] = useState(false);
   const [specimenDocked, setSpecimenDocked] = useState(false);
@@ -47,6 +51,11 @@ export default function App() {
   const handleSelectPlankton = useCallback((id) => {
     setGalleryRestoreId(id);
     setSelectedId(id);
+  }, []);
+
+  const handleBackFromDetail = useCallback(() => {
+    setSelectedId(null);
+    setGalleryGpuEpoch((epoch) => epoch + 1);
   }, []);
 
   const finishReturnHome = useCallback(() => {
@@ -85,9 +94,19 @@ export default function App() {
     [scanExiting],
   );
 
+  const handleScanPhaseChange = useCallback((phase) => {
+    setScanProcessing(phase === "processing");
+  }, []);
+
   const handleScanComplete = useCallback((previewUrl) => {
+    setGalleryGpuEpoch((epoch) => epoch + 1);
     setScanPreview(previewUrl);
     setScanResultOpen(true);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        preloadSplineViewerAssets(scanSpecimen.splineViewer, scanSpecimen.splineUrl);
+      });
+    });
   }, []);
 
   const handleCloseScanResult = useCallback(() => {
@@ -100,10 +119,14 @@ export default function App() {
     setScanResultOpen(false);
   }, [scanExiting]);
 
-  const showGallery = !selectedPlankton;
+  const showGallery = true;
+  const detailOpen = Boolean(selectedPlankton && !scanResultOpen);
   const galleryConcealed = scanResultOpen && !scanExiting;
   const showHandoffLayer = scanResultOpen || (specimenDocked && !selectedPlankton);
   const galleryFocusPlanktonId = galleryFocusId ?? galleryRestoreId;
+
+  const scanFlowActive = scanResultOpen || handoffActive || handoffLanding;
+  const galleryGpuReleased = scanFlowActive;
 
   useEffect(() => {
     if (!showGallery || galleryFocusId || !galleryRestoreId) return undefined;
@@ -117,18 +140,24 @@ export default function App() {
 
   return (
     <div className="app-stage">
-      {showGallery ? (
-        <HomeScreen
+      <HomeScreen
           collection={collection}
           onSelect={handleSelectPlankton}
           onScanComplete={handleScanComplete}
+          onScanPanelChange={setScanPanelOpen}
+          onScanPhaseChange={handleScanPhaseChange}
           focusPlanktonId={galleryFocusPlanktonId}
           handoffActive={handoffActive || handoffLanding}
           galleryDockRef={galleryDockRef}
           specimenDocked={specimenDocked}
           concealed={galleryConcealed}
+          behind={detailOpen}
+          scanPanelOpen={scanPanelOpen}
+          scanFlowActive={scanFlowActive}
+          scanProcessing={scanProcessing}
+          galleryGpuReleased={galleryGpuReleased}
+          galleryGpuEpoch={galleryGpuEpoch}
         />
-      ) : null}
 
       {scanResultOpen ? (
         <ScanScreen
@@ -162,7 +191,7 @@ export default function App() {
           plankton={selectedPlankton}
           speciesIndex={selectedIndex}
           collectionLength={collection.length}
-          onBack={() => setSelectedId(null)}
+          onBack={handleBackFromDetail}
           onPrev={() => goToSpecies(selectedIndex - 1)}
           onNext={() => goToSpecies(selectedIndex + 1)}
         />

@@ -1,44 +1,42 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SHARED_SPLINE_VIEWER } from "../utils/splineRuntime";
 
-const loadedViewerScripts = new Set();
+let viewerRuntimePromise = null;
 const SPLINE_ZOOM_OUT_MIN_FACTOR = 1;
 const SPLINE_ZOOM_IN_MAX_FACTOR = 3;
 const ZOOM_WHEEL_SENSITIVITY = 1.05;
 const ZOOM_SMOOTHING = 0.3;
 const ZOOM_STOP_EPSILON = 0.0004;
 
-export function preloadSplineViewerAssets(viewerSrc, sceneUrl) {
-  loadSplineViewerModule(viewerSrc);
+export function preloadSplineViewerAssets(_viewerSrc, sceneUrl) {
+  loadSplineViewerModule();
   if (sceneUrl) {
     fetch(sceneUrl).catch(() => {});
   }
 }
 
-function loadSplineViewerModule(viewerSrc) {
+function loadSplineViewerModule() {
   if (customElements.get("spline-viewer")) {
     return Promise.resolve();
   }
 
-  if (loadedViewerScripts.has(viewerSrc)) {
-    return new Promise((resolve) => {
-      const check = () => {
-        if (customElements.get("spline-viewer")) resolve();
-        else requestAnimationFrame(check);
-      };
-      check();
-    });
+  if (viewerRuntimePromise) {
+    return viewerRuntimePromise;
   }
 
-  loadedViewerScripts.add(viewerSrc);
-
-  return new Promise((resolve, reject) => {
+  viewerRuntimePromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.type = "module";
-    script.src = viewerSrc;
+    script.src = SHARED_SPLINE_VIEWER;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Spline viewer"));
+    script.onerror = () => {
+      viewerRuntimePromise = null;
+      reject(new Error("Failed to load Spline viewer"));
+    };
     document.head.appendChild(script);
   });
+
+  return viewerRuntimePromise;
 }
 
 function hideSplineChrome(viewer) {
@@ -599,6 +597,17 @@ function getSplineFitSpan(camera, container, fillFactor) {
   };
 }
 
+function lockGallerySplineControls(viewer) {
+  const controls = viewer._spline ? getOrbitControls(viewer._spline) : null;
+  if (!controls) return;
+
+  controls.enableRotate = false;
+  controls.enablePan = false;
+  controls.enableZoom = false;
+  controls.autoRotate = false;
+  controls.update?.();
+}
+
 function frameSplineSubject(
   viewer,
   zoomScale = 1,
@@ -659,6 +668,10 @@ function applySplineFraming(viewer, zoomScale, limitZoom, fillFactor, maxZoom) {
 
   viewer._compactReframed = false;
   const framed = frameSplineSubject(viewer, zoomScale, limitZoom, fillFactor, maxZoom);
+
+  if (framed && !limitZoom) {
+    lockGallerySplineControls(viewer);
+  }
 
   if (framed && limitZoom) {
     const controls = getOrbitControls(viewer._spline);
@@ -775,6 +788,10 @@ function configureSplineViewer(
         maxZoom,
       );
 
+      if (viewer._initialFramed && !limitZoom) {
+        lockGallerySplineControls(viewer);
+      }
+
       if (viewer._initialFramed && introTurntable) {
         startIntroTurntable(
           viewer,
@@ -810,16 +827,18 @@ function configureSplineViewer(
       if (!viewer._initialFramed) finalize(true);
     }, 500);
   } else {
-    window.setTimeout(() => finalize(true), 300);
-    window.setTimeout(() => finalize(true), 1000);
+    window.setTimeout(() => {
+      if (!viewer._initialFramed) finalize(true);
+    }, 300);
+    window.setTimeout(() => {
+      if (!viewer._initialFramed) finalize(true);
+    }, 1000);
   }
-
-  window.setTimeout(() => hideSplineChrome(viewer), 1200);
 }
 
 export default function SplinePlanktonViewer({
   url,
-  viewerSrc,
+  viewerSrc: _viewerSrc,
   className,
   zoomScale = 1,
   fillFactor = 0.68,
@@ -832,39 +851,45 @@ export default function SplinePlanktonViewer({
   resizeFrozen = false,
   notifyWhenFramed = false,
   onSceneReady = null,
+  enabled = true,
+  loading = "lazy",
 }) {
   const containerRef = useRef(null);
   const framingRef = useRef({ zoomScale, fillFactor, maxZoom, limitZoom });
+  const loadingRef = useRef(loading);
   const [ready, setReady] = useState(false);
   framingRef.current = { zoomScale, fillFactor, maxZoom, limitZoom };
+  loadingRef.current = loading;
   const introTurntable =
     introTurntableMs != null
       ? { durationMs: introTurntableMs, rotations: introTurntableRotations }
       : null;
+  const introTurntableRef = useRef(introTurntable);
+  if (introTurntable) {
+    introTurntableRef.current = introTurntable;
+  }
 
   useEffect(() => {
-    if (!viewerSrc) return;
-
     let cancelled = false;
 
-    loadSplineViewerModule(viewerSrc).then(() => {
+    loadSplineViewerModule().then(() => {
       if (!cancelled) setReady(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [viewerSrc]);
+  }, []);
 
   useEffect(() => {
-    if (!ready || !url || !containerRef.current) return;
+    if (!enabled || !ready || !url || !containerRef.current) return;
 
     const viewer = document.createElement("spline-viewer");
     viewer.setAttribute("url", url);
     viewer.setAttribute("background", "transparent");
-    viewer.setAttribute("loading", "eager");
+    viewer.setAttribute("loading", loadingRef.current);
     viewer.setAttribute("hint", "false");
-    viewer.setAttribute("events-target", "global");
+    viewer.setAttribute("events-target", "local");
     viewer.style.width = "100%";
     viewer.style.height = "100%";
     viewer.style.display = "block";
@@ -878,7 +903,7 @@ export default function SplinePlanktonViewer({
         limitZoom,
         framing.fillFactor,
         framing.maxZoom,
-        introTurntable,
+        introTurntableRef.current,
         notifyWhenFramed ? onSceneReady : null,
       );
 
@@ -890,40 +915,47 @@ export default function SplinePlanktonViewer({
     viewer.addEventListener("load-complete", onLoadComplete);
     containerRef.current.replaceChildren(viewer);
 
+    let resizeFrame = 0;
     const resizeObserver = new ResizeObserver(() => {
       if (!viewer._spline) return;
-      if (containerRef.current?.dataset.resizeFrozen === "true") {
+      if (resizeFrame) return;
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        if (containerRef.current?.dataset.resizeFrozen === "true") {
+          viewer._spline.requestRender?.();
+          return;
+        }
+
+        resizeSplineViewer(viewer);
+
+        const host = containerRef.current;
+        const framing = framingRef.current;
+        if (
+          !viewer._handoffFramingLocked &&
+          framing.fillFactor > 0.85 &&
+          !viewer._compactReframed &&
+          host &&
+          host.clientWidth >= 40 &&
+          host.clientHeight >= 40
+        ) {
+          frameSplineSubject(
+            viewer,
+            framing.zoomScale,
+            limitZoom,
+            framing.fillFactor,
+            framing.maxZoom,
+          );
+          viewer._compactReframed = true;
+        }
+
         viewer._spline.requestRender?.();
-        return;
-      }
-      resizeSplineViewer(viewer);
-
-      const host = containerRef.current;
-      const framing = framingRef.current;
-      if (
-        !viewer._handoffFramingLocked &&
-        framing.fillFactor > 0.85 &&
-        !viewer._compactReframed &&
-        host &&
-        host.clientWidth >= 40 &&
-        host.clientHeight >= 40
-      ) {
-        frameSplineSubject(
-          viewer,
-          framing.zoomScale,
-          limitZoom,
-          framing.fillFactor,
-          framing.maxZoom,
-        );
-        viewer._compactReframed = true;
-      }
-
-      viewer._spline.requestRender?.();
+      });
     });
 
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       viewer.removeEventListener("load-complete", onLoadComplete);
       viewer._smoothZoomCleanup?.();
@@ -932,14 +964,15 @@ export default function SplinePlanktonViewer({
       stopIntroTurntable(viewer);
       viewer.remove();
     };
-  }, [ready, url, limitZoom, maxZoom, introTurntableMs, introTurntableRotations, notifyWhenFramed, onSceneReady]);
+  }, [enabled, ready, url, limitZoom, maxZoom, notifyWhenFramed, onSceneReady]);
 
   useEffect(() => {
+    if (!enabled || !limitZoom) return;
     const viewer = containerRef.current?.querySelector("spline-viewer");
     if (!viewer?._spline || !viewer._initialFramed) return;
-    if (viewer._handoffFramingLocked) return;
+    if (viewer._handoffFramingLocked || resizeFrozen) return;
     applySplineFraming(viewer, zoomScale, limitZoom, fillFactor, maxZoom);
-  }, [zoomScale, fillFactor, maxZoom, limitZoom]);
+  }, [enabled, limitZoom, zoomScale, fillFactor, maxZoom, resizeFrozen]);
 
   useLayoutEffect(() => {
     if (!containerRef.current) return;

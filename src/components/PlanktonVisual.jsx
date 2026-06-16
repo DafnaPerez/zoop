@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
 import PlanktonScene from "./PlanktonScene";
 import SplinePlanktonViewer from "./SplinePlanktonViewer";
@@ -12,24 +12,39 @@ export default function PlanktonVisual({
   className = "",
   onSceneReady = null,
   float = false,
+  loadModel = true,
+  resizeFrozen = false,
+  splineEnabled = true,
 }) {
+  const wasLoadedRef = useRef(false);
+  if (loadModel) wasLoadedRef.current = true;
+
+  const showModel = wasLoadedRef.current;
+  const mountSpline = showModel && splineEnabled;
+
   const isSpline = plankton.viewer === "spline";
   const splineZoomScale = getPlanktonSplineZoomScale(plankton, { context: "gallery" });
   const ringDistance = Math.abs(offset);
   const floatPhase = ringDistance * 0.9;
   const classes = [
     "plankton-visual",
-    float && isSpline ? "plankton-visual--float" : "",
+    float && isSpline && mountSpline ? "plankton-visual--float" : "",
+    !mountSpline && isSpline && showModel ? "plankton-visual--placeholder" : "",
+    !showModel && isSpline ? "plankton-visual--placeholder" : "",
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
+  if (!showModel) {
+    return <div className={classes} aria-hidden="true" />;
+  }
+
   return (
     <div
       className={classes}
       style={
-        float && isSpline
+        float && isSpline && mountSpline
           ? { animationDelay: `${floatPhase}s` }
           : undefined
       }
@@ -42,6 +57,9 @@ export default function PlanktonVisual({
           zoomScale={splineZoomScale}
           notifyWhenFramed={Boolean(onSceneReady)}
           onSceneReady={onSceneReady}
+          loading="lazy"
+          resizeFrozen={resizeFrozen}
+          enabled={mountSpline}
         />
       ) : (
         <Canvas

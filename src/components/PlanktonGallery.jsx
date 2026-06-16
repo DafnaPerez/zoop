@@ -100,6 +100,14 @@ export default function PlanktonGallery({
   galleryDockRef = null,
   specimenDocked = false,
   concealed = false,
+  behind = false,
+  scanPanelOpen = false,
+  scanFlowActive = false,
+  scanProcessing = false,
+  galleryGpuReleased = false,
+  galleryGpuEpoch = 0,
+  onScanPanelChange = null,
+  onScanPhaseChange = null,
 }) {
   const [activeIndex, setActiveIndex] = useState(() =>
     getFocusIndex(planktons, focusPlanktonId),
@@ -107,6 +115,9 @@ export default function PlanktonGallery({
   const [dragPx, setDragPx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
+  const [hydrationTick, setHydrationTick] = useState(0);
+  const [gallerySplinesPaused, setGallerySplinesPaused] = useState(false);
+  const hydratedIdsRef = useRef(new Set());
 
   const trackRef = useRef(null);
   const dragStartX = useRef(0);
@@ -142,6 +153,71 @@ export default function PlanktonGallery({
       clearSettle();
     };
   }, [clearSettle]);
+
+  const focusIndex = getFocusIndex(planktons, focusPlanktonId);
+  const centerIndex =
+    focusPlanktonId && planktons[focusIndex]?.id === focusPlanktonId
+      ? focusIndex
+      : activeIndex;
+  const isSliding = isDragging || isSettling || Math.abs(dragPx) > 0.5;
+
+  useEffect(() => {
+    hydratedIdsRef.current.clear();
+    setHydrationTick((tick) => tick + 1);
+  }, [galleryGpuEpoch]);
+
+  useEffect(() => {
+    if (galleryGpuReleased) {
+      setGallerySplinesPaused(true);
+      return undefined;
+    }
+
+    if (!behind) {
+      setGallerySplinesPaused(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setGallerySplinesPaused(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [behind, galleryGpuReleased]);
+
+  const shouldLoadModel = useCallback(
+    (planktonId, slot) => {
+      if (hydratedIdsRef.current.has(planktonId)) return true;
+      if (Math.abs(slot) === 0) {
+        hydratedIdsRef.current.add(planktonId);
+        return true;
+      }
+      if (isSliding) {
+        if (Math.abs(slot) <= 1) {
+          hydratedIdsRef.current.add(planktonId);
+          return true;
+        }
+        return false;
+      }
+      if (Math.abs(slot) <= VISIBLE_RADIUS) {
+        hydratedIdsRef.current.add(planktonId);
+        return true;
+      }
+      return false;
+    },
+    [isSliding],
+  );
+
+  const trimHydration = useCallback((visibleIds) => {
+    const hydrated = hydratedIdsRef.current;
+    if (hydrated.size <= VISIBLE_RADIUS * 2 + 1) return;
+
+    let changed = false;
+    for (const id of hydrated) {
+      if (!visibleIds.has(id)) {
+        hydrated.delete(id);
+        changed = true;
+      }
+    }
+
+    if (changed) setHydrationTick((tick) => tick + 1);
+  }, []);
 
   const clampDragPx = useCallback(
     (px) => Math.max(-MAX_DRAG_PX, Math.min(MAX_DRAG_PX, px)),
@@ -182,12 +258,6 @@ export default function PlanktonGallery({
     }
   }, [focusPlanktonId, planktons]);
 
-  const focusIndex = getFocusIndex(planktons, focusPlanktonId);
-  const centerIndex =
-    focusPlanktonId && planktons[focusIndex]?.id === focusPlanktonId
-      ? focusIndex
-      : activeIndex;
-
   const finishDrag = useCallback(
     (deltaPx, startIndex = dragStartIndex.current) => {
       const trackWidth = trackRef.current?.clientWidth ?? window.innerWidth;
@@ -211,10 +281,19 @@ export default function PlanktonGallery({
         settleTimerRef.current = window.setTimeout(() => {
           settleTimerRef.current = null;
           setIsSettling(false);
+
+          const visibleIds = new Set();
+          for (let index = 0; index < planktons.length; index += 1) {
+            const slot = getWrappedSlot(index, activeIndexRef.current, planktons.length);
+            if (Math.abs(slot) <= VISIBLE_RADIUS) {
+              visibleIds.add(planktons[index].id);
+            }
+          }
+          trimHydration(visibleIds);
         }, 460);
       });
     },
-    [clearSettle, planktons.length],
+    [clearSettle, planktons, trimHydration],
   );
 
   useEffect(() => {
@@ -351,12 +430,11 @@ export default function PlanktonGallery({
 
   const activePlankton = planktons[centerIndex];
   const dragOffset = dragPx / INNER_OFFSET_X;
-  const isSliding = isDragging || isSettling || Math.abs(dragPx) > 0.5;
   const edgeBuffer = 0.45 + Math.abs(dragOffset) * 0.15;
 
   return (
     <main
-      className={`gallery-screen${handoffActive ? " gallery-screen--handoff" : ""}${concealed ? " gallery-screen--concealed" : ""}`}
+      className={`gallery-screen${handoffActive ? " gallery-screen--handoff" : ""}${concealed ? " gallery-screen--concealed" : ""}${behind ? " gallery-screen--behind" : ""}`}
     >
       <BlueprintScaffold />
       <div className="gallery-glow gallery-glow-primary" aria-hidden="true" />
@@ -367,7 +445,11 @@ export default function PlanktonGallery({
           <span className="gallery-header-spacer" aria-hidden="true" />
           <p className="gallery-eyebrow">Plankton Atlas</p>
           <div className="gallery-header-actions">
-            <PlanktonScan onScanComplete={onScanComplete} />
+            <PlanktonScan
+              onScanComplete={onScanComplete}
+              onExpandedChange={onScanPanelChange}
+              onScanPhaseChange={onScanPhaseChange}
+            />
             <PlanktonSearch
               planktons={planktons}
               onSelect={(index) => onSelect(planktons[index].id)}
@@ -392,11 +474,18 @@ export default function PlanktonGallery({
         {planktons.map((plankton, index) => {
           const slot = getWrappedSlot(index, centerIndex, planktons.length);
           const visualOffset = slot + dragOffset;
+          const inView = Math.abs(visualOffset) <= VISIBLE_RADIUS + edgeBuffer;
+          const isHydrated = hydratedIdsRef.current.has(plankton.id);
+          void hydrationTick;
 
-          if (Math.abs(visualOffset) > VISIBLE_RADIUS + edgeBuffer) return null;
+          if (!inView && !isHydrated) return null;
 
           const metrics = getCarouselMetrics(visualOffset, slot);
           const isCenterVisual = slot === 0 && Math.abs(dragOffset) < 0.08;
+          const loadModel = shouldLoadModel(plankton.id, slot);
+          const splineEnabled = !gallerySplinesPaused;
+          const freezeSplineResize =
+            isDragging || scanPanelOpen || scanFlowActive || scanProcessing;
 
           const isHandoffTarget =
             handoffActive && slot === 0 && plankton.id === focusPlanktonId;
@@ -409,9 +498,11 @@ export default function PlanktonGallery({
               type="button"
               className={`gallery-item${isCenterVisual ? " gallery-item--active" : ""}${Math.abs(slot) >= 2 ? " gallery-item--outer" : ""}${isHandoffTarget ? " gallery-item--handoff-target" : ""}`}
               style={{
-                zIndex: metrics.zIndex,
-                opacity: metrics.opacity,
-                filter: `blur(${metrics.blur}px)`,
+                zIndex: inView ? metrics.zIndex : -1,
+                opacity: inView ? metrics.opacity : 0,
+                visibility: inView ? "visible" : "hidden",
+                pointerEvents: inView ? "auto" : "none",
+                filter: inView ? `blur(${metrics.blur}px)` : "none",
                 transform: `translate(-50%, -50%) translate(${metrics.x}px, ${metrics.y + (plankton.galleryOffsetY ?? 0)}px) scale(${metrics.scale})`,
               }}
               onClick={() => handleItemClick(index, slot)}
@@ -430,19 +521,22 @@ export default function PlanktonGallery({
                       className="plankton-visual plankton-visual--docked-host"
                       aria-hidden="true"
                     />
-                  ) : concealed ? (
-                    <div
-                      className="plankton-visual plankton-visual--placeholder"
-                      aria-hidden="true"
-                    />
                   ) : (
-                    <PlanktonVisual
-                      plankton={plankton}
-                      index={index}
-                      offset={slot}
-                      isCenter={isCenterVisual}
-                      float
-                    />
+                    <div
+                      className={`gallery-model-host${concealed || behind ? " gallery-model-host--hidden" : ""}`}
+                      aria-hidden={concealed || behind}
+                    >
+                      <PlanktonVisual
+                        plankton={plankton}
+                        index={index}
+                        offset={slot}
+                        isCenter={isCenterVisual}
+                        float
+                        loadModel={loadModel}
+                        splineEnabled={splineEnabled}
+                        resizeFrozen={freezeSplineResize}
+                      />
+                    </div>
                   )}
                 </div>
               </div>

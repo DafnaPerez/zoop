@@ -25,6 +25,7 @@ export const scanSpecimen = {
   galleryZoomScale: 1.28,
   galleryFillFactor: 0.84,
   detailZoomScale: 1.55,
+  galleryImage: publicUrl("/gallery/belzebub-hanseni.png"),
   layout: { top: "12%", left: "8%", width: "18%", zIndex: 2 },
 };
 

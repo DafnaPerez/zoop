@@ -3,6 +3,7 @@ import { BlueprintFrame, BlueprintScaffold } from "./BlueprintScaffold";
 import PlanktonScan from "./PlanktonScan";
 import PlanktonSearch from "./PlanktonSearch";
 import PlanktonVisual from "./PlanktonVisual";
+import { preloadSplineViewerAssets } from "./SplinePlanktonViewer";
 import { scanSpecimen } from "../data/scanSpecimen";
 
 const VISIBLE_RADIUS = 2;
@@ -85,6 +86,22 @@ function getWrappedSlot(index, centerIndex, length) {
   return slot;
 }
 
+function resolveDragSteps(deltaPx, startIndex, length, slideThreshold) {
+  if (Math.abs(deltaPx) < slideThreshold) {
+    return { nextIndex: startIndex, remainderPx: 0 };
+  }
+
+  let steps = Math.trunc(-deltaPx / INNER_OFFSET_X);
+  if (steps === 0) {
+    steps = deltaPx > 0 ? -1 : 1;
+  }
+
+  return {
+    nextIndex: wrapIndex(startIndex + steps, length),
+    remainderPx: deltaPx + steps * INNER_OFFSET_X,
+  };
+}
+
 function getFocusIndex(planktons, focusPlanktonId) {
   if (!focusPlanktonId) return 0;
   const index = planktons.findIndex((entry) => entry.id === focusPlanktonId);
@@ -101,11 +118,6 @@ export default function PlanktonGallery({
   specimenDocked = false,
   concealed = false,
   behind = false,
-  scanPanelOpen = false,
-  scanFlowActive = false,
-  scanProcessing = false,
-  galleryGpuReleased = false,
-  galleryGpuEpoch = 0,
   onScanPanelChange = null,
   onScanPhaseChange = null,
 }) {
@@ -115,9 +127,6 @@ export default function PlanktonGallery({
   const [dragPx, setDragPx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
-  const [hydrationTick, setHydrationTick] = useState(0);
-  const [gallerySplinesPaused, setGallerySplinesPaused] = useState(false);
-  const hydratedIdsRef = useRef(new Set());
 
   const trackRef = useRef(null);
   const dragStartX = useRef(0);
@@ -162,62 +171,10 @@ export default function PlanktonGallery({
   const isSliding = isDragging || isSettling || Math.abs(dragPx) > 0.5;
 
   useEffect(() => {
-    hydratedIdsRef.current.clear();
-    setHydrationTick((tick) => tick + 1);
-  }, [galleryGpuEpoch]);
-
-  useEffect(() => {
-    if (galleryGpuReleased) {
-      setGallerySplinesPaused(true);
-      return undefined;
-    }
-
-    if (!behind) {
-      setGallerySplinesPaused(false);
-      return undefined;
-    }
-
-    const timer = window.setTimeout(() => setGallerySplinesPaused(true), 180);
-    return () => window.clearTimeout(timer);
-  }, [behind, galleryGpuReleased]);
-
-  const shouldLoadModel = useCallback(
-    (planktonId, slot) => {
-      if (hydratedIdsRef.current.has(planktonId)) return true;
-      if (Math.abs(slot) === 0) {
-        hydratedIdsRef.current.add(planktonId);
-        return true;
-      }
-      if (isSliding) {
-        if (Math.abs(slot) <= 1) {
-          hydratedIdsRef.current.add(planktonId);
-          return true;
-        }
-        return false;
-      }
-      if (Math.abs(slot) <= VISIBLE_RADIUS) {
-        hydratedIdsRef.current.add(planktonId);
-        return true;
-      }
-      return false;
-    },
-    [isSliding],
-  );
-
-  const trimHydration = useCallback((visibleIds) => {
-    const hydrated = hydratedIdsRef.current;
-    if (hydrated.size <= VISIBLE_RADIUS * 2 + 1) return;
-
-    let changed = false;
-    for (const id of hydrated) {
-      if (!visibleIds.has(id)) {
-        hydrated.delete(id);
-        changed = true;
-      }
-    }
-
-    if (changed) setHydrationTick((tick) => tick + 1);
-  }, []);
+    const plankton = planktons[centerIndex];
+    if (!plankton || plankton.viewer !== "spline") return;
+    preloadSplineViewerAssets(plankton.splineViewer, plankton.splineUrl);
+  }, [centerIndex, planktons]);
 
   const clampDragPx = useCallback(
     (px) => Math.max(-MAX_DRAG_PX, Math.min(MAX_DRAG_PX, px)),
@@ -262,15 +219,18 @@ export default function PlanktonGallery({
     (deltaPx, startIndex = dragStartIndex.current) => {
       const trackWidth = trackRef.current?.clientWidth ?? window.innerWidth;
       const slideThreshold = Math.max(SWIPE_THRESHOLD, trackWidth * 0.08);
+      const { nextIndex, remainderPx } = resolveDragSteps(
+        deltaPx,
+        startIndex,
+        planktons.length,
+        slideThreshold,
+      );
 
       clearSettle();
 
-      if (deltaPx > slideThreshold) {
-        setActiveIndex(wrapIndex(startIndex - 1, planktons.length));
-        setDragPx(deltaPx - INNER_OFFSET_X);
-      } else if (deltaPx < -slideThreshold) {
-        setActiveIndex(wrapIndex(startIndex + 1, planktons.length));
-        setDragPx(deltaPx + INNER_OFFSET_X);
+      if (nextIndex !== startIndex) {
+        setActiveIndex(nextIndex);
+        setDragPx(remainderPx);
       }
 
       setIsDragging(false);
@@ -281,19 +241,10 @@ export default function PlanktonGallery({
         settleTimerRef.current = window.setTimeout(() => {
           settleTimerRef.current = null;
           setIsSettling(false);
-
-          const visibleIds = new Set();
-          for (let index = 0; index < planktons.length; index += 1) {
-            const slot = getWrappedSlot(index, activeIndexRef.current, planktons.length);
-            if (Math.abs(slot) <= VISIBLE_RADIUS) {
-              visibleIds.add(planktons[index].id);
-            }
-          }
-          trimHydration(visibleIds);
         }, 460);
       });
     },
-    [clearSettle, planktons, trimHydration],
+    [clearSettle, planktons.length],
   );
 
   useEffect(() => {
@@ -332,7 +283,11 @@ export default function PlanktonGallery({
         wheelAccumRef.current = 0;
       }
 
-      wheelAccumRef.current = clampDragPx(wheelAccumRef.current - delta);
+      const maxWheelPx = INNER_OFFSET_X * planktons.length;
+      wheelAccumRef.current = Math.max(
+        -maxWheelPx,
+        Math.min(maxWheelPx, wheelAccumRef.current - delta),
+      );
       setDragPx(wheelAccumRef.current);
       setIsDragging(true);
 
@@ -353,7 +308,7 @@ export default function PlanktonGallery({
         wheelTimerRef.current = null;
       }
     };
-  }, [clampDragPx, finishDrag]);
+  }, [finishDrag, planktons.length]);
 
   const onPointerDown = (event) => {
     if (event.button !== 0) return;
@@ -475,17 +430,11 @@ export default function PlanktonGallery({
           const slot = getWrappedSlot(index, centerIndex, planktons.length);
           const visualOffset = slot + dragOffset;
           const inView = Math.abs(visualOffset) <= VISIBLE_RADIUS + edgeBuffer;
-          const isHydrated = hydratedIdsRef.current.has(plankton.id);
-          void hydrationTick;
 
-          if (!inView && !isHydrated) return null;
+          if (!inView) return null;
 
           const metrics = getCarouselMetrics(visualOffset, slot);
           const isCenterVisual = slot === 0 && Math.abs(dragOffset) < 0.08;
-          const loadModel = shouldLoadModel(plankton.id, slot);
-          const splineEnabled = !gallerySplinesPaused;
-          const freezeSplineResize =
-            isDragging || scanPanelOpen || scanFlowActive || scanProcessing;
 
           const isHandoffTarget =
             handoffActive && slot === 0 && plankton.id === focusPlanktonId;
@@ -528,13 +477,8 @@ export default function PlanktonGallery({
                     >
                       <PlanktonVisual
                         plankton={plankton}
-                        index={index}
                         offset={slot}
-                        isCenter={isCenterVisual}
                         float
-                        loadModel={loadModel}
-                        splineEnabled={splineEnabled}
-                        resizeFrozen={freezeSplineResize}
                       />
                     </div>
                   )}

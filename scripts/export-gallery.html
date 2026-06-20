@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gallery PNG export</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #061018;
+      }
+      #stage {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 480px;
+        height: 660px;
+        overflow: hidden;
+      }
+      #host {
+        width: 100%;
+        height: 100%;
+      }
+      spline-viewer {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: transparent !important;
+      }
+      canvas.export-canvas {
+        width: 480px;
+        height: 660px;
+        display: block;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/vendor/three/build/three.module.js",
+          "three/addons/": "/vendor/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="host"></div>
+    </div>
+    <script type="module">
+      import * as THREE from "three";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+      /** Match gallery item box: min(46vw,480) x min(62vh,660) */
+      const EXPORT_WIDTH = 480;
+      const EXPORT_HEIGHT = 660;
+      const DETAIL_SPLINE_ZOOM = 0.7;
+      const EXPORT_FILL_FACTOR = 0.68;
+      const FRAMING_PADDING = 1.15;
+      const MAX_SPLINE_ZOOM = 14;
+      const EXPORT_PIXEL_RATIO = 3;
+      const OUTPUT_WIDTH = EXPORT_WIDTH * EXPORT_PIXEL_RATIO;
+      const OUTPUT_HEIGHT = EXPORT_HEIGHT * EXPORT_PIXEL_RATIO;
+
+      const SPECS = [
+        {
+          id: "calanus-finmarchicus",
+          type: "spline",
+          url: "/models/Calanus_finmarchicus_scene_spliecode.splinecode",
+          galleryZoomScale: 1.35,
+        },
+        {
+          id: "tomopteris-helgolandica",
+          type: "spline",
+          url: "/models/Tomopteris_helgolandica_scene_spliecode.splinecode",
+          galleryZoomScale: 2.6,
+          fillFactor: 0.65,
+          fitContain: true,
+        },
+        {
+          id: "euphausia-superba",
+          type: "spline",
+          url: "/models/Euphausia_superba_scene_spliecode.splinecode",
+          galleryZoomScale: 1.35,
+        },
+        {
+          id: "fritillaria-borealis",
+          type: "spline",
+          url: "/models/Fritillaria_borealis_scene_spliecode.splinecode",
+          galleryZoomScale: 1.85,
+        },
+        {
+          id: "limacina-helicina",
+          type: "spline",
+          url: "/models/Limacina_helicina_scene_spliecode.splinecode",
+          galleryZoomScale: 1.45,
+        },
+        {
+          id: "parasagitta-elegans",
+          type: "spline",
+          url: "/models/Parasagitta_elegans_scene_spliecode.splinecode",
+          galleryZoomScale: 2.75,
+        },
+        {
+          id: "pleurobrachia-pileus",
+          type: "spline",
+          url: "/models/Pleurobrachia_pileus_scene_spliecode.splinecode",
+          galleryZoomScale: 2.15,
+          fillFactor: 0.82,
+        },
+        {
+          id: "clione-limacina",
+          type: "spline",
+          url: "/models/Clione_limacina_scene_spliecode.splinecode",
+          galleryZoomScale: 1.9,
+          fillFactor: 0.86,
+        },
+        {
+          id: "belzebub-hanseni",
+          type: "spline",
+          url: "/models/Belzebub_hanseni_scene_spliecode.splinecode",
+          galleryZoomScale: 1.28,
+          fillFactor: 0.96,
+        },
+      ];
+
+      function wait(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function loadViewerScript() {
+        return new Promise((resolve, reject) => {
+          if (customElements.get("spline-viewer")) {
+            resolve();
+            return;
+          }
+          const script = document.createElement("script");
+          script.type = "module";
+          script.src = "/models/Calanus_finmarchicus_spline_viewer.js";
+          script.onload = () => resolve();
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+
+      function isSceneGroupBounds(size) {
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const minDim = Math.min(size.x, size.y, size.z);
+        return maxDim > 500 && minDim / maxDim > 0.8;
+      }
+
+      function getMeshBounds(spline) {
+        let meshEntity = null;
+        let largestFallback = null;
+        let largestVolume = 0;
+
+        spline._scene?.traverseEntity?.((entity) => {
+          const verts = entity.singleBBox?.vertices;
+          if (!verts?.length) return;
+
+          const xs = verts.map((v) => v.x);
+          const ys = verts.map((v) => v.y);
+          const zs = verts.map((v) => v.z);
+          const size = {
+            x: Math.max(...xs) - Math.min(...xs),
+            y: Math.max(...ys) - Math.min(...ys),
+            z: Math.max(...zs) - Math.min(...zs),
+          };
+          if (!size.x && !size.y && !size.z) return;
+
+          const bounds = {
+            center: {
+              x: (Math.min(...xs) + Math.max(...xs)) / 2,
+              y: (Math.min(...ys) + Math.max(...ys)) / 2,
+              z: (Math.min(...zs) + Math.max(...zs)) / 2,
+            },
+            size,
+          };
+
+          if (entity.name === "mesh_node") {
+            meshEntity = bounds;
+            return;
+          }
+
+          if (isSceneGroupBounds(size)) return;
+
+          const volume = size.x * size.y * size.z;
+          if (volume > largestVolume) {
+            largestVolume = volume;
+            largestFallback = bounds;
+          }
+        });
+
+        return meshEntity ?? largestFallback;
+      }
+
+      function resizeSplineViewer(viewer) {
+        const spline = viewer._spline;
+        const container = viewer.parentElement;
+        if (!spline || !container) return;
+
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        if (!width || !height) return;
+
+        spline._viewportWidth = width;
+        spline._viewportHeight = height;
+
+        if (spline._frameView) {
+          spline._frameView.enableResponsive = true;
+          if (spline._frameView.frameSize) {
+            spline._frameView.frameSize.x = width;
+            spline._frameView.frameSize.y = height;
+          }
+        }
+
+        spline._resize?.(true);
+      }
+
+      function getOrbitControls(spline) {
+        return spline?._controls?.orbitControls;
+      }
+
+      function getFramingSize(bounds) {
+        const { x, y, z } = bounds.size;
+        const maxPlanar = Math.max(x, z);
+
+        if (x / Math.max(y, 1) > 1.35 && maxPlanar < 280) {
+          const estHeight = Math.max(y, maxPlanar * 0.42, x * 0.22);
+          return { x, y: estHeight, z };
+        }
+
+        return { x, y, z };
+      }
+
+      function frameSpline(
+        viewer,
+        zoomScale,
+        fillFactor = EXPORT_FILL_FACTOR,
+        fitContain = false,
+      ) {
+        const spline = viewer._spline;
+        const container = viewer.parentElement;
+        const bounds = getMeshBounds(spline);
+        const controls = getOrbitControls(spline);
+        const camera = spline?._camera;
+        if (!bounds || !controls || !camera || !container) return false;
+
+        const framing = getFramingSize(bounds);
+        const size = {
+          x: framing.x * FRAMING_PADDING,
+          y: framing.y * FRAMING_PADDING,
+          z: framing.z * FRAMING_PADDING,
+        };
+        const { center } = bounds;
+
+        const dx = center.x - controls.target.x;
+        const dy = center.y - controls.target.y;
+        const dz = center.z - controls.target.z;
+        controls.target.set(center.x, center.y, center.z);
+        camera.position.x += dx;
+        camera.position.y += dy;
+        camera.position.z += dz;
+        controls.update?.();
+
+        const fitSpan = {
+          vertical: container.clientHeight,
+          horizontal: container.clientWidth,
+        };
+        const zoomForHeight = fitSpan.vertical / (size.y / fillFactor);
+        const zoomForWidth = fitSpan.horizontal / (size.x / fillFactor);
+        const isWideRibbon =
+          bounds.size.x / Math.max(bounds.size.y, 1) > 1.35 &&
+          Math.max(bounds.size.x, bounds.size.z) < 280;
+        const targetZoom =
+          fitContain || !isWideRibbon
+            ? Math.min(zoomForHeight, zoomForWidth)
+            : zoomForHeight;
+        const baseZoom = Math.min(targetZoom * zoomScale, MAX_SPLINE_ZOOM);
+
+        if (Number.isFinite(baseZoom) && baseZoom > 0) {
+          spline.setZoom?.(baseZoom);
+        }
+
+        spline.requestRender?.();
+        return true;
+      }
+
+      function hideSplineSceneBackground(spline) {
+        spline?._scene?.traverseEntity?.((entity) => {
+          const name = entity.name?.toLowerCase?.() ?? "";
+          if (
+            name === "rectangle" ||
+            name.includes("background") ||
+            name.endsWith("_bg") ||
+            name === "bg"
+          ) {
+            entity.visible = false;
+          }
+        });
+        spline?.setBackgroundColor?.("transparent");
+      }
+
+      function hideSplineChrome(viewer) {
+        const root = viewer.shadowRoot;
+        if (!root) return;
+
+        root.querySelector("#logo")?.style.setProperty("display", "none");
+        root.querySelector("#hint-drag")?.style.setProperty("display", "none");
+        root.querySelector("canvas")?.style.setProperty("background", "transparent");
+        root.querySelector("canvas")?.style.setProperty("background-color", "transparent");
+      }
+
+      function stripNearBlackPixels(sourceCanvas, threshold = 28) {
+        const out = document.createElement("canvas");
+        out.width = OUTPUT_WIDTH;
+        out.height = OUTPUT_HEIGHT;
+        const ctx = out.getContext("2d");
+        const scale = Math.min(OUTPUT_WIDTH / sourceCanvas.width, OUTPUT_HEIGHT / sourceCanvas.height);
+        const dw = sourceCanvas.width * scale;
+        const dh = sourceCanvas.height * scale;
+        const dx = (OUTPUT_WIDTH - dw) / 2;
+        const dy = (OUTPUT_HEIGHT - dh) / 2;
+        ctx.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        ctx.drawImage(sourceCanvas, dx, dy, dw, dh);
+
+        const imageData = ctx.getImageData(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        const pixels = imageData.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (
+            pixels[i] <= threshold &&
+            pixels[i + 1] <= threshold &&
+            pixels[i + 2] <= threshold
+          ) {
+            pixels[i + 3] = 0;
+          }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        return out;
+      }
+
+      function toSolidMeshGroup(source) {
+        const group = new THREE.Group();
+        source.updateMatrixWorld(true);
+
+        source.traverse((child) => {
+          if (!child.isMesh || !child.geometry) return;
+
+          const geometry = child.geometry.clone();
+          geometry.applyMatrix4(child.matrixWorld);
+          group.add(
+            new THREE.Mesh(
+              geometry,
+              new THREE.MeshBasicMaterial({ color: 0xffffff }),
+            ),
+          );
+        });
+
+        return group;
+      }
+
+      function toCreaseLineGroup(source, edgeThreshold = 15) {
+        const lineGroup = new THREE.Group();
+        source.updateMatrixWorld(true);
+
+        source.traverse((child) => {
+          if (!child.isMesh || !child.geometry) return;
+
+          const geometry = child.geometry.clone();
+          geometry.applyMatrix4(child.matrixWorld);
+          const edges = new THREE.EdgesGeometry(geometry, edgeThreshold);
+          lineGroup.add(
+            new THREE.LineSegments(
+              edges,
+              new THREE.LineBasicMaterial({ color: 0xffffff }),
+            ),
+          );
+        });
+
+        return lineGroup;
+      }
+
+      function readCanvasImageData(sourceCanvas) {
+        const copy = document.createElement("canvas");
+        copy.width = sourceCanvas.width;
+        copy.height = sourceCanvas.height;
+        const ctx = copy.getContext("2d");
+        ctx.drawImage(sourceCanvas, 0, 0);
+        return ctx.getImageData(0, 0, copy.width, copy.height);
+      }
+
+      function extractSilhouetteOutline(sourceCanvas, sensitivity = 0.35) {
+        const width = sourceCanvas.width;
+        const height = sourceCanvas.height;
+        const { data: src } = readCanvasImageData(sourceCanvas);
+        const mask = new Float32Array(width * height);
+
+        for (let i = 0; i < width * height; i++) {
+          const p = i * 4;
+          mask[i] = src[p + 3] > 64 || src[p] > 64 ? 1 : 0;
+        }
+
+        const out = document.createElement("canvas");
+        out.width = width;
+        out.height = height;
+        const outCtx = out.getContext("2d");
+        const imageData = outCtx.createImageData(width, height);
+        const dst = imageData.data;
+
+        for (let y = 1; y < height - 1; y++) {
+          for (let x = 1; x < width - 1; x++) {
+            const idx = y * width + x;
+            const gx =
+              -mask[idx - width - 1] +
+              mask[idx - width + 1] +
+              -2 * mask[idx - 1] +
+              2 * mask[idx + 1] +
+              -mask[idx + width - 1] +
+              mask[idx + width + 1];
+            const gy =
+              -mask[idx - width - 1] -
+              2 * mask[idx - width] -
+              mask[idx - width + 1] +
+              mask[idx + width - 1] +
+              2 * mask[idx + width] +
+              mask[idx + width + 1];
+            const magnitude = Math.hypot(gx, gy);
+
+            if (magnitude >= sensitivity) {
+              const p = idx * 4;
+              dst[p] = 255;
+              dst[p + 1] = 255;
+              dst[p + 2] = 255;
+              dst[p + 3] = 255;
+            }
+          }
+        }
+
+        outCtx.putImageData(imageData, 0, 0);
+        return out;
+      }
+
+      function compositeLineCanvases(...layers) {
+        const out = document.createElement("canvas");
+        out.width = OUTPUT_WIDTH;
+        out.height = OUTPUT_HEIGHT;
+        const ctx = out.getContext("2d");
+
+        for (const layer of layers) {
+          ctx.drawImage(layer, 0, 0);
+        }
+
+        return out;
+      }
+
+      function countOpaqueNeighbors(source, x, y, width, height) {
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if (source[(ny * width + nx) * 4 + 3] >= 128) count++;
+          }
+        }
+        return count;
+      }
+
+      function finalizeLineArtPixels(
+        pixels,
+        threshold = 28,
+        lineRadius = 1,
+        denoiseMinNeighbors = 2,
+      ) {
+        for (let i = 0; i < pixels.length; i += 4) {
+          const alpha = pixels[i + 3];
+          const isDark =
+            pixels[i] <= threshold &&
+            pixels[i + 1] <= threshold &&
+            pixels[i + 2] <= threshold;
+
+          if (alpha < 12 || isDark) {
+            pixels[i] = 0;
+            pixels[i + 1] = 0;
+            pixels[i + 2] = 0;
+            pixels[i + 3] = 0;
+            continue;
+          }
+
+          pixels[i] = 255;
+          pixels[i + 1] = 255;
+          pixels[i + 2] = 255;
+          pixels[i + 3] = 255;
+        }
+
+        if (denoiseMinNeighbors > 0) {
+          for (let pass = 0; pass < 2; pass++) {
+            const source = new Uint8ClampedArray(pixels);
+            for (let y = 0; y < OUTPUT_HEIGHT; y++) {
+              for (let x = 0; x < OUTPUT_WIDTH; x++) {
+                const i = (y * OUTPUT_WIDTH + x) * 4;
+                if (source[i + 3] < 128) continue;
+                if (
+                  countOpaqueNeighbors(
+                    source,
+                    x,
+                    y,
+                    OUTPUT_WIDTH,
+                    OUTPUT_HEIGHT,
+                  ) < denoiseMinNeighbors
+                ) {
+                  pixels[i + 3] = 0;
+                }
+              }
+            }
+          }
+        }
+
+        if (lineRadius <= 0) return;
+
+        const source = new Uint8ClampedArray(pixels);
+        for (let y = 0; y < OUTPUT_HEIGHT; y++) {
+          for (let x = 0; x < OUTPUT_WIDTH; x++) {
+            const i = (y * OUTPUT_WIDTH + x) * 4;
+            if (source[i + 3] < 128) continue;
+            for (let dy = -lineRadius; dy <= lineRadius; dy++) {
+              for (let dxp = -lineRadius; dxp <= lineRadius; dxp++) {
+                const nx = x + dxp;
+                const ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= OUTPUT_WIDTH || ny >= OUTPUT_HEIGHT) continue;
+                const ni = (ny * OUTPUT_WIDTH + nx) * 4;
+                pixels[ni] = 255;
+                pixels[ni + 1] = 255;
+                pixels[ni + 2] = 255;
+                pixels[ni + 3] = 255;
+              }
+            }
+          }
+        }
+      }
+
+      function finalizeLineArtCanvas(sourceCanvas, lineRadius = 1, denoiseMinNeighbors = 2) {
+        const out = document.createElement("canvas");
+        out.width = OUTPUT_WIDTH;
+        out.height = OUTPUT_HEIGHT;
+        const ctx = out.getContext("2d");
+        ctx.drawImage(sourceCanvas, 0, 0);
+        const imageData = ctx.getImageData(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        finalizeLineArtPixels(imageData.data, 28, lineRadius, denoiseMinNeighbors);
+        ctx.putImageData(imageData, 0, 0);
+        return out;
+      }
+
+      function mountExportCanvas(canvas) {
+        const host = document.getElementById("host");
+        host.replaceChildren(canvas);
+      }
+
+      function findSplineCanvas(viewer) {
+        return (
+          viewer.shadowRoot?.querySelector("canvas") ??
+          viewer.querySelector("canvas") ??
+          document.querySelector("#host canvas")
+        );
+      }
+
+      async function captureSpline(spec) {
+        const host = document.getElementById("host");
+        host.replaceChildren();
+
+        const viewer = document.createElement("spline-viewer");
+        viewer.setAttribute("url", spec.url);
+        viewer.setAttribute("background", "transparent");
+        viewer.setAttribute("loading", "eager");
+        viewer.setAttribute("hint", "false");
+        host.appendChild(viewer);
+
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Spline load timeout")), 120000);
+          viewer.addEventListener(
+            "load-complete",
+            () => {
+              clearTimeout(timeout);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+
+        await wait(400);
+        hideSplineChrome(viewer);
+        hideSplineSceneBackground(viewer._spline);
+        resizeSplineViewer(viewer);
+        await wait(100);
+
+        const zoomScale = DETAIL_SPLINE_ZOOM * (spec.galleryZoomScale ?? 1);
+        const fillFactor = spec.fillFactor ?? EXPORT_FILL_FACTOR;
+        const fitContain = spec.fitContain ?? false;
+        frameSpline(viewer, zoomScale, fillFactor, fitContain);
+        await wait(300);
+        hideSplineSceneBackground(viewer._spline);
+        resizeSplineViewer(viewer);
+        frameSpline(viewer, zoomScale, fillFactor, fitContain);
+        await wait(200);
+
+        const spline = viewer._spline;
+        spline?.setBackgroundColor?.("transparent");
+        spline?.requestRender?.();
+        await wait(100);
+
+        const canvas = findSplineCanvas(viewer);
+        if (!canvas) throw new Error(`No canvas for ${spec.id}`);
+      }
+
+      async function captureGlb(spec) {
+        const host = document.getElementById("host");
+        host.replaceChildren();
+
+        const canvas = document.createElement("canvas");
+        canvas.width = OUTPUT_WIDTH;
+        canvas.height = OUTPUT_HEIGHT;
+        canvas.className = "export-canvas";
+        host.appendChild(canvas);
+
+        const renderer = new THREE.WebGLRenderer({
+          canvas,
+          alpha: true,
+          antialias: true,
+          preserveDrawingBuffer: true,
+        });
+        renderer.setPixelRatio(1);
+        renderer.setSize(OUTPUT_WIDTH, OUTPUT_HEIGHT, false);
+        renderer.setClearColor(0x000000, 0);
+
+        const scene = new THREE.Scene();
+        const loader = new GLTFLoader();
+        const gltf = await loader.loadAsync(spec.url);
+        const model = gltf.scene.clone();
+        model.scale.setScalar(spec.glbScale ?? 1.6);
+        model.updateMatrixWorld(true);
+
+        const solidGroup = toSolidMeshGroup(model);
+        const box = new THREE.Box3().setFromObject(solidGroup);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+
+        const fillFactor = spec.fillFactor ?? EXPORT_FILL_FACTOR;
+        const fitHeight = size.y * FRAMING_PADDING;
+        const fitWidth = size.x * FRAMING_PADDING;
+        const aspect = OUTPUT_WIDTH / OUTPUT_HEIGHT;
+        const frustumHeight = Math.max(fitHeight, fitWidth / aspect) / fillFactor;
+        const frustumWidth = frustumHeight * aspect;
+
+        const camera = new THREE.OrthographicCamera(
+          -frustumWidth / 2,
+          frustumWidth / 2,
+          frustumHeight / 2,
+          -frustumHeight / 2,
+          0.01,
+          Math.max(frustumHeight, frustumWidth) * 10,
+        );
+        camera.position.set(center.x, center.y, center.z + Math.max(size.x, size.y, size.z) * 4);
+        camera.lookAt(center);
+        camera.updateProjectionMatrix();
+
+        scene.add(solidGroup);
+        renderer.render(scene, camera);
+        const outline = extractSilhouetteOutline(
+          canvas,
+          spec.silhouetteSensitivity ?? 0.35,
+        );
+
+        let composite = outline;
+        if ((spec.edgeThreshold ?? 15) > 0) {
+          scene.clear();
+          scene.add(toCreaseLineGroup(model, spec.edgeThreshold));
+          renderer.clear();
+          renderer.render(scene, camera);
+          composite = compositeLineCanvases(outline, canvas);
+        }
+
+        renderer.dispose();
+
+        mountExportCanvas(
+          finalizeLineArtCanvas(
+            composite,
+            spec.lineRadius ?? 2,
+            spec.denoiseMinNeighbors ?? 2,
+          ),
+        );
+      }
+
+      async function captureSpecimen(spec) {
+        if (spec.type === "glb") {
+          await captureGlb(spec);
+          return;
+        }
+        await captureSpline(spec);
+      }
+
+      window.prepareGalleryExport = async () => {
+        await loadViewerScript();
+      };
+
+      window.captureGallerySpecimen = async (spec) => {
+        await captureSpecimen(spec);
+      };
+
+      window.galleryExportSpecs = SPECS;
+    </script>
+  </body>
+</html>

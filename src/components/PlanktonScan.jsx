@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { preloadSplineViewerAssets } from "./SplinePlanktonViewer";
+import { scanSpecimen } from "../data/scanSpecimen";
 
 const PROCESSING_MS = 3800;
 
@@ -122,6 +124,7 @@ export default function PlanktonScan({ onScanComplete, onExpandedChange, onScanP
     setUploadPreview(previewUrl);
     setPhase("processing");
     onScanPhaseChange?.("processing");
+    preloadSplineViewerAssets(scanSpecimen.splineViewer, scanSpecimen.splineUrl);
 
     processingTimerRef.current = window.setTimeout(() => {
       processingTimerRef.current = null;

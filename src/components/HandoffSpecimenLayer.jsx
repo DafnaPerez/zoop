@@ -108,6 +108,7 @@ export default function HandoffSpecimenLayer({
   handoffStartRect = null,
   specimenDocked = false,
   scanOpen = false,
+  detailOpen = false,
   onHandoffComplete,
   onDockReady,
 }) {
@@ -126,33 +127,10 @@ export default function HandoffSpecimenLayer({
   const dockReadySentRef = useRef(false);
 
   const [introComplete, setIntroComplete] = useState(false);
-  const [handoffSplineReady, setHandoffSplineReady] = useState(false);
 
   const handoffInFlight = handoffActive || handoffLanding;
   const useGalleryFraming = specimenDocked || handoffLanding;
   const splineLocked = handoffInFlight || specimenDocked;
-
-  useEffect(() => {
-    if (!scanOpen) {
-      setHandoffSplineReady(false);
-      return undefined;
-    }
-
-    if (specimenDocked) {
-      setHandoffSplineReady(true);
-      return undefined;
-    }
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      if (!cancelled) setHandoffSplineReady(true);
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [scanOpen, specimenDocked]);
 
   useEffect(() => {
     const node = motionRef.current;
@@ -374,7 +352,7 @@ export default function HandoffSpecimenLayer({
   }, [handoffLanding, specimenDocked, onDockReady]);
 
   useLayoutEffect(() => {
-    if (!specimenDocked || scanOpen || !shellRef.current) return undefined;
+    if (!specimenDocked || scanOpen || detailOpen || !shellRef.current) return undefined;
 
     const syncToGallery = () => {
       const dockEl = galleryDockRef?.current;
@@ -386,6 +364,11 @@ export default function HandoffSpecimenLayer({
     };
 
     syncToGallery();
+    let frame = requestAnimationFrame(function followDock() {
+      syncToGallery();
+      frame = requestAnimationFrame(followDock);
+    });
+
     window.addEventListener("resize", syncToGallery);
 
     const dockEl = galleryDockRef?.current;
@@ -393,10 +376,11 @@ export default function HandoffSpecimenLayer({
     resizeObserver?.observe(dockEl);
 
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", syncToGallery);
       resizeObserver?.disconnect();
     };
-  }, [specimenDocked, scanOpen, galleryDockRef]);
+  }, [specimenDocked, scanOpen, detailOpen, galleryDockRef]);
 
   useEffect(() => {
     if (handoffActive) {
@@ -405,12 +389,15 @@ export default function HandoffSpecimenLayer({
     }
   }, [handoffActive]);
 
+  const detailSuppressed = detailOpen && !scanOpen && !handoffInFlight;
+
   const shellClass = [
     "scan-specimen-flyer-shell",
     scanOpen && introComplete && !handoffInFlight
       ? "scan-specimen-flyer-shell--interactive"
       : "",
-    splineLocked ? "scan-specimen-flyer-shell--handoff" : "",
+    handoffInFlight ? "scan-specimen-flyer-shell--handoff" : "",
+    detailSuppressed ? "scan-specimen-flyer-shell--detail-suppressed" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -419,6 +406,9 @@ export default function HandoffSpecimenLayer({
     "scan-specimen-motion",
     scanOpen && !splineLocked && !introComplete ? "scan-specimen-entrance" : "",
     scanOpen && introComplete && !splineLocked ? "scan-specimen-entrance--settled" : "",
+    specimenDocked && !scanOpen && !handoffInFlight && !detailSuppressed
+      ? "plankton-visual--float"
+      : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -426,21 +416,19 @@ export default function HandoffSpecimenLayer({
   const specimenNode = (
     <div ref={assignShellRef} className={shellClass}>
       <div ref={motionRef} className={motionClass}>
-        {handoffSplineReady ? (
-          <SplinePlanktonViewer
-            key="scan-handoff-specimen"
-            url={scanSpecimen.splineUrl}
-            viewerSrc={scanSpecimen.splineViewer}
-            className={useGalleryFraming ? "plankton-spline-viewer" : "detail-spline-viewer"}
-            zoomScale={useGalleryFraming ? GALLERY_SPLINE_ZOOM : SCAN_SPLINE_ZOOM}
-            fillFactor={useGalleryFraming ? GALLERY_FILL_FACTOR : 0.68}
-            limitZoom
-            introTurntableMs={scanOpen ? INTRO_MS : null}
-            introTurntableRotations={2}
-            frozen={splineLocked}
-            resizeFrozen={scanOpen && !splineLocked}
-          />
-        ) : null}
+        <SplinePlanktonViewer
+          key="scan-handoff-specimen"
+          url={scanSpecimen.splineUrl}
+          viewerSrc={scanSpecimen.splineViewer}
+          className={useGalleryFraming ? "plankton-spline-viewer" : "detail-spline-viewer"}
+          zoomScale={useGalleryFraming ? GALLERY_SPLINE_ZOOM : SCAN_SPLINE_ZOOM}
+          fillFactor={useGalleryFraming ? GALLERY_FILL_FACTOR : 0.68}
+          limitZoom
+          introTurntableMs={scanOpen && !introComplete ? INTRO_MS : null}
+          introTurntableRotations={2}
+          frozen={splineLocked}
+          resizeFrozen={scanOpen && !introComplete && !splineLocked}
+        />
       </div>
     </div>
   );

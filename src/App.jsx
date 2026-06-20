@@ -25,9 +25,6 @@ export default function App() {
   const [scanExiting, setScanExiting] = useState(false);
   const [galleryFocusId, setGalleryFocusId] = useState(null);
   const [galleryRestoreId, setGalleryRestoreId] = useState(null);
-  const [scanPanelOpen, setScanPanelOpen] = useState(false);
-  const [scanProcessing, setScanProcessing] = useState(false);
-  const [galleryGpuEpoch, setGalleryGpuEpoch] = useState(0);
   const [handoffStartRect, setHandoffStartRect] = useState(null);
   const [handoffLanding, setHandoffLanding] = useState(false);
   const [specimenDocked, setSpecimenDocked] = useState(false);
@@ -55,7 +52,6 @@ export default function App() {
 
   const handleBackFromDetail = useCallback(() => {
     setSelectedId(null);
-    setGalleryGpuEpoch((epoch) => epoch + 1);
   }, []);
 
   const finishReturnHome = useCallback(() => {
@@ -94,18 +90,11 @@ export default function App() {
     [scanExiting],
   );
 
-  const handleScanPhaseChange = useCallback((phase) => {
-    setScanProcessing(phase === "processing");
-  }, []);
-
   const handleScanComplete = useCallback((previewUrl) => {
-    setGalleryGpuEpoch((epoch) => epoch + 1);
     setScanPreview(previewUrl);
     setScanResultOpen(true);
     window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        preloadSplineViewerAssets(scanSpecimen.splineViewer, scanSpecimen.splineUrl);
-      });
+      preloadSplineViewerAssets(scanSpecimen.splineViewer, scanSpecimen.splineUrl);
     });
   }, []);
 
@@ -122,11 +111,9 @@ export default function App() {
   const showGallery = true;
   const detailOpen = Boolean(selectedPlankton && !scanResultOpen);
   const galleryConcealed = scanResultOpen && !scanExiting;
-  const showHandoffLayer = scanResultOpen || (specimenDocked && !selectedPlankton);
+  const showHandoffLayer = scanResultOpen || specimenDocked;
   const galleryFocusPlanktonId = galleryFocusId ?? galleryRestoreId;
-
   const scanFlowActive = scanResultOpen || handoffActive || handoffLanding;
-  const galleryGpuReleased = scanFlowActive;
 
   useEffect(() => {
     if (!showGallery || galleryFocusId || !galleryRestoreId) return undefined;
@@ -144,19 +131,13 @@ export default function App() {
           collection={collection}
           onSelect={handleSelectPlankton}
           onScanComplete={handleScanComplete}
-          onScanPanelChange={setScanPanelOpen}
-          onScanPhaseChange={handleScanPhaseChange}
+          onScanPanelChange={undefined}
           focusPlanktonId={galleryFocusPlanktonId}
           handoffActive={handoffActive || handoffLanding}
           galleryDockRef={galleryDockRef}
           specimenDocked={specimenDocked}
           concealed={galleryConcealed}
           behind={detailOpen}
-          scanPanelOpen={scanPanelOpen}
-          scanFlowActive={scanFlowActive}
-          scanProcessing={scanProcessing}
-          galleryGpuReleased={galleryGpuReleased}
-          galleryGpuEpoch={galleryGpuEpoch}
         />
 
       {scanResultOpen ? (
@@ -181,6 +162,7 @@ export default function App() {
           handoffStartRect={handoffStartRect}
           specimenDocked={specimenDocked}
           scanOpen={scanResultOpen}
+          detailOpen={detailOpen}
           onHandoffComplete={handleHandoffComplete}
           onDockReady={handleDockReady}
         />

@@ -1,5 +1,9 @@
 import { publicUrl } from "../utils/publicUrl";
 
+function galleryImage(id) {
+  return publicUrl(`/gallery/${id}.png`);
+}
+
 export const planktons = [
     {
       id: "calanus-finmarchicus",
@@ -23,6 +27,7 @@ export const planktons = [
       splineViewer: publicUrl("/models/Calanus_finmarchicus_spline_viewer.js"),
       detailZoomScale: 1.35,
       galleryZoomScale: 1.35,
+      galleryImage: galleryImage("calanus-finmarchicus"),
       sketches: [publicUrl("/sketches/Calanus1.png"), publicUrl("/sketches/calanus2.png")],
       layout: { top: "6%", left: "4%", width: "20%", zIndex: 1 },
     },
@@ -37,8 +42,9 @@ export const planktons = [
       splineUrl: publicUrl("/models/Tomopteris_helgolandica_scene_spliecode.splinecode"),
       splineViewer: publicUrl("/models/Tomopteris_helgolandica_spline_viewer.js"),
       detailZoomScale: 1.85,
-      galleryZoomScale: 2.85,
+      galleryZoomScale: 2.6,
       galleryOffsetY: 32,
+      galleryImage: galleryImage("tomopteris-helgolandica"),
       layout: { top: "64%", left: "58%", width: "24%", zIndex: 1 },
     },
     {
@@ -53,6 +59,7 @@ export const planktons = [
       splineViewer: publicUrl("/models/Euphausia_superba_spline_viewer.js"),
       detailZoomScale: 1.35,
       galleryZoomScale: 1.35,
+      galleryImage: galleryImage("euphausia-superba"),
       layout: { top: "6%", left: "58%", width: "22%", zIndex: 1 },
     },
     {
@@ -62,7 +69,12 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Fritillaria borealis.",
-      model: publicUrl("/models/Fritillaria_borealis.glb"),
+      viewer: "spline",
+      splineUrl: publicUrl("/models/Fritillaria_borealis_scene_spliecode.splinecode"),
+      splineViewer: publicUrl("/models/Fritillaria_borealis_spline_viewer.js"),
+      detailZoomScale: 1.85,
+      galleryZoomScale: 1.85,
+      galleryImage: galleryImage("fritillaria-borealis"),
       layout: { top: "24%", left: "73%", width: "19%", zIndex: 2 },
     },
     {
@@ -72,7 +84,12 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Limacina helicina.",
-      model: publicUrl("/models/Limacina_helicina.glb"),
+      viewer: "spline",
+      splineUrl: publicUrl("/models/Limacina_helicina_scene_spliecode.splinecode"),
+      splineViewer: publicUrl("/models/Limacina_helicina_spline_viewer.js"),
+      detailZoomScale: 1.05,
+      galleryZoomScale: 1.45,
+      galleryImage: galleryImage("limacina-helicina"),
       layout: { top: "33%", left: "34%", width: "22%", zIndex: 3 },
     },
     {
@@ -82,7 +99,12 @@ export const planktons = [
       depth: "Depth information",
       size: "Size information",
       description: "Short description about Parasagitta elegans.",
-      model: publicUrl("/models/Parasagitta_elegans.glb"),
+      viewer: "spline",
+      splineUrl: publicUrl("/models/Parasagitta_elegans_scene_spliecode.splinecode"),
+      splineViewer: publicUrl("/models/Parasagitta_elegans_spline_viewer.js"),
+      detailZoomScale: 2.0,
+      galleryZoomScale: 2.75,
+      galleryImage: galleryImage("parasagitta-elegans"),
       layout: { top: "42%", left: "52%", width: "22%", zIndex: 2 },
     },
     {
@@ -95,10 +117,10 @@ export const planktons = [
       viewer: "spline",
       splineUrl: publicUrl("/models/Pleurobrachia_pileus_scene_spliecode.splinecode"),
       splineViewer: publicUrl("/models/Pleurobrachia_pileus_spline_viewer.js"),
-      detailZoomScale: 2.05,
+      detailZoomScale: 1.7,
       galleryZoomScale: 2.15,
-      detailOffsetX: 38,
-      detailOffsetY: -40,
+      detailFillFactor: 0.5,
+      galleryImage: galleryImage("pleurobrachia-pileus"),
       layout: { top: "52%", left: "5%", width: "21%", zIndex: 2 },
     },
     {
@@ -113,6 +135,7 @@ export const planktons = [
       splineViewer: publicUrl("/models/Clione_limacina_spline_viewer.js"),
       detailZoomScale: 1.35,
       galleryZoomScale: 1.9,
+      galleryImage: galleryImage("clione-limacina"),
       searchThumbZoomScale: 2.45,
       searchThumbScale: 0.095,
       layout: { top: "10%", left: "26%", width: "18%", zIndex: 2 },

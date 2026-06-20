@@ -120,6 +120,7 @@ export default function DetailScreen({
                   viewerSrc={plankton.splineViewer}
                   className="detail-spline-viewer"
                   zoomScale={getPlanktonSplineZoomScale(plankton)}
+                  fillFactor={plankton.detailFillFactor ?? 0.68}
                   limitZoom
                 />
               ) : (

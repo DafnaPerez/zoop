@@ -1,0 +1,38 @@
+[
+  {
+    "id": "calanus-finmarchicus",
+    "file": "calanus-finmarchicus.png"
+  },
+  {
+    "id": "tomopteris-helgolandica",
+    "file": "tomopteris-helgolandica.png"
+  },
+  {
+    "id": "euphausia-superba",
+    "file": "euphausia-superba.png"
+  },
+  {
+    "id": "fritillaria-borealis",
+    "file": "fritillaria-borealis.png"
+  },
+  {
+    "id": "limacina-helicina",
+    "file": "limacina-helicina.png"
+  },
+  {
+    "id": "parasagitta-elegans",
+    "file": "parasagitta-elegans.png"
+  },
+  {
+    "id": "pleurobrachia-pileus",
+    "file": "pleurobrachia-pileus.png"
+  },
+  {
+    "id": "clione-limacina",
+    "file": "clione-limacina.png"
+  },
+  {
+    "id": "belzebub-hanseni",
+    "file": "belzebub-hanseni.png"
+  }
+]

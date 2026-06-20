@@ -39,6 +39,20 @@ function loadSplineViewerModule() {
   return viewerRuntimePromise;
 }
 
+function destroySplineViewerWebGL(viewer) {
+  try {
+    const canvas = viewer.shadowRoot?.querySelector("canvas");
+    if (!canvas) return;
+    const gl =
+      canvas.getContext("webgl2") ??
+      canvas.getContext("webgl") ??
+      canvas.getContext("experimental-webgl");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  } catch (_) {
+    // shadow DOM may be inaccessible in some browsers
+  }
+}
+
 function hideSplineChrome(viewer) {
   const root = viewer.shadowRoot;
   if (!root) return;
@@ -820,19 +834,24 @@ function configureSplineViewer(
     viewer._spline?.requestRender?.();
   };
 
-  requestAnimationFrame(() => finalize(true));
+  viewer._configureTimers = [];
+
+  const configRafId = requestAnimationFrame(() => finalize(true));
+  viewer._configureTimers.push({ raf: true, id: configRafId });
 
   if (introTurntable) {
-    window.setTimeout(() => {
+    const t1 = window.setTimeout(() => {
       if (!viewer._initialFramed) finalize(true);
     }, 500);
+    viewer._configureTimers.push({ id: t1 });
   } else {
-    window.setTimeout(() => {
+    const t1 = window.setTimeout(() => {
       if (!viewer._initialFramed) finalize(true);
     }, 300);
-    window.setTimeout(() => {
+    const t2 = window.setTimeout(() => {
       if (!viewer._initialFramed) finalize(true);
     }, 1000);
+    viewer._configureTimers.push({ id: t1 }, { id: t2 });
   }
 }
 
@@ -962,6 +981,12 @@ export default function SplinePlanktonViewer({
       viewer._orbitInteractionCleanup?.();
       stopRotationHold(viewer);
       stopIntroTurntable(viewer);
+      (viewer._configureTimers ?? []).forEach(({ raf, id }) => {
+        if (raf) cancelAnimationFrame(id);
+        else window.clearTimeout(id);
+      });
+      viewer._configureTimers = [];
+      destroySplineViewerWebGL(viewer);
       viewer.remove();
     };
   }, [enabled, ready, url, limitZoom, maxZoom, notifyWhenFramed, onSceneReady]);

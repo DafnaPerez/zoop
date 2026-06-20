@@ -107,8 +107,15 @@ async function main() {
 
     console.log("Rendering specimens (this may take a few minutes)…");
 
-    async function stripDarkBackgroundBase64(screenshotBase64) {
-      return page.evaluate((b64) => {
+    async function postProcessSplineScreenshot(screenshotBase64, options = {}) {
+      return page.evaluate((payload) => {
+        const {
+          b64,
+          threshold = 28,
+          whiteCutoff = 196,
+          denoiseMinNeighbors = 0,
+        } = payload;
+
         return new Promise((resolve, reject) => {
           const img = new Image();
           img.onload = () => {
@@ -119,22 +126,75 @@ async function main() {
             ctx.drawImage(img, 0, 0);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const pixels = imageData.data;
+            const width = canvas.width;
+            const height = canvas.height;
+
             for (let i = 0; i < pixels.length; i += 4) {
-              if (
-                pixels[i] <= 28 &&
-                pixels[i + 1] <= 28 &&
-                pixels[i + 2] <= 28
-              ) {
+              const r = pixels[i];
+              const g = pixels[i + 1];
+              const b = pixels[i + 2];
+              const isDark = r <= threshold && g <= threshold && b <= threshold;
+              const isLine =
+                !isDark &&
+                r >= whiteCutoff &&
+                g >= whiteCutoff &&
+                b >= whiteCutoff;
+
+              if (!isLine) {
+                pixels[i] = 0;
+                pixels[i + 1] = 0;
+                pixels[i + 2] = 0;
                 pixels[i + 3] = 0;
+                continue;
+              }
+
+              pixels[i] = 255;
+              pixels[i + 1] = 255;
+              pixels[i + 2] = 255;
+              pixels[i + 3] = 255;
+            }
+
+            const countOpaqueNeighbors = (source, x, y) => {
+              let count = 0;
+              for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                  if (dx === 0 && dy === 0) continue;
+                  const nx = x + dx;
+                  const ny = y + dy;
+                  if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                  if (source[(ny * width + nx) * 4 + 3] >= 128) count++;
+                }
+              }
+              return count;
+            };
+
+            if (denoiseMinNeighbors > 0) {
+              for (let pass = 0; pass < 2; pass++) {
+                const source = new Uint8ClampedArray(pixels);
+                for (let y = 0; y < height; y++) {
+                  for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    if (source[i + 3] < 128) continue;
+                    if (countOpaqueNeighbors(source, x, y) < denoiseMinNeighbors) {
+                      pixels[i + 3] = 0;
+                    }
+                  }
+                }
               }
             }
+
             ctx.putImageData(imageData, 0, 0);
             resolve(canvas.toDataURL("image/png").split(",")[1]);
           };
           img.onerror = () => reject(new Error("Failed to decode export screenshot"));
           img.src = `data:image/png;base64,${b64}`;
         });
-      }, screenshotBase64);
+      }, {
+        b64: screenshotBase64,
+        threshold: options.exportThreshold ?? 28,
+        whiteCutoff: options.exportWhiteCutoff ?? 196,
+        denoiseMinNeighbors: options.exportDenoiseMinNeighbors ?? 0,
+      });
     }
 
     for (const spec of specs) {
@@ -155,7 +215,10 @@ async function main() {
         });
       } else {
         const screenshot = await host.screenshot({ type: "png" });
-        pngBase64 = await stripDarkBackgroundBase64(screenshot.toString("base64"));
+        pngBase64 = await postProcessSplineScreenshot(
+          screenshot.toString("base64"),
+          spec,
+        );
       }
 
       const outPath = path.join(galleryDir, `${spec.id}.png`);

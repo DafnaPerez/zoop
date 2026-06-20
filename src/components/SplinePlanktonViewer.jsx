@@ -68,6 +68,7 @@ function hideSplineSceneBackground(spline) {
     const name = entity.name?.toLowerCase?.() ?? "";
     if (
       name === "rectangle" ||
+      name.includes("grid") ||
       name.includes("background") ||
       name.endsWith("_bg") ||
       name === "bg"

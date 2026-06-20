@@ -9,10 +9,9 @@ export default function HomeScreen({
   onScanComplete,
   onScanPanelChange,
   focusPlanktonId,
-  handoffActive,
-  galleryDockRef,
-  specimenDocked,
   concealed,
+  collectionHandoff = false,
+  gallerySpecimenTargetRef,
   behind = false,
 }) {
   useEffect(() => {
@@ -29,10 +28,9 @@ export default function HomeScreen({
       onScanComplete={onScanComplete}
       onScanPanelChange={onScanPanelChange}
       focusPlanktonId={focusPlanktonId}
-      handoffActive={handoffActive}
-      galleryDockRef={galleryDockRef}
-      specimenDocked={specimenDocked}
       concealed={concealed}
+      collectionHandoff={collectionHandoff}
+      gallerySpecimenTargetRef={gallerySpecimenTargetRef}
       behind={behind}
     />
   );

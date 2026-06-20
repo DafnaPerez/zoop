@@ -113,10 +113,9 @@ export default function PlanktonGallery({
   onSelect,
   onScanComplete,
   focusPlanktonId = null,
-  handoffActive = false,
-  galleryDockRef = null,
-  specimenDocked = false,
   concealed = false,
+  collectionHandoff = false,
+  gallerySpecimenTargetRef = null,
   behind = false,
   onScanPanelChange = null,
   onScanPhaseChange = null,
@@ -389,7 +388,7 @@ export default function PlanktonGallery({
 
   return (
     <main
-      className={`gallery-screen${handoffActive ? " gallery-screen--handoff" : ""}${concealed ? " gallery-screen--concealed" : ""}${behind ? " gallery-screen--behind" : ""}`}
+      className={`gallery-screen${concealed ? " gallery-screen--concealed" : ""}${collectionHandoff ? " gallery-screen--handoff" : ""}${behind ? " gallery-screen--behind" : ""}`}
     >
       <BlueprintScaffold />
       <div className="gallery-glow gallery-glow-primary" aria-hidden="true" />
@@ -437,22 +436,22 @@ export default function PlanktonGallery({
           const isCenterVisual = slot === 0 && Math.abs(dragOffset) < 0.08;
 
           const isHandoffTarget =
-            handoffActive && slot === 0 && plankton.id === focusPlanktonId;
-          const useDockHost =
-            plankton.id === scanSpecimen.id && (handoffActive || specimenDocked);
+            collectionHandoff &&
+            plankton.id === scanSpecimen.id &&
+            isCenterVisual;
 
           return (
             <button
               key={plankton.id}
               type="button"
-              className={`gallery-item${isCenterVisual ? " gallery-item--active" : ""}${Math.abs(slot) >= 2 ? " gallery-item--outer" : ""}${isHandoffTarget ? " gallery-item--handoff-target" : ""}`}
+              className={`gallery-item${isCenterVisual ? " gallery-item--active" : ""}${Math.abs(slot) >= 2 ? " gallery-item--outer" : ""}${isHandoffTarget ? " gallery-item--handoff-target gallery-item--handoff-cloaked" : ""}`}
               style={{
                 zIndex: inView ? metrics.zIndex : -1,
                 opacity: inView ? metrics.opacity : 0,
                 visibility: inView ? "visible" : "hidden",
                 pointerEvents: inView ? "auto" : "none",
                 filter: inView ? `blur(${metrics.blur}px)` : "none",
-                transform: `translate(-50%, -50%) translate(${metrics.x}px, ${metrics.y + (plankton.galleryOffsetY ?? 0)}px) scale(${metrics.scale})`,
+                transform: `translate(-50%, -50%) translate(${metrics.x + (plankton.galleryOffsetX ?? 0)}px, ${metrics.y + (plankton.galleryOffsetY ?? 0)}px) scale(${metrics.scale})`,
               }}
               onClick={() => handleItemClick(index, slot)}
               aria-label={plankton.name}
@@ -463,25 +462,20 @@ export default function PlanktonGallery({
                 className="gallery-item-inner"
                 style={{ animationDelay: `${Math.abs(slot) * 0.35}s` }}
               >
-                <div className="gallery-handoff-target-box">
-                  {useDockHost ? (
-                    <div
-                      ref={galleryDockRef}
-                      className="plankton-visual plankton-visual--docked-host"
-                      aria-hidden="true"
+                <div
+                  ref={isHandoffTarget ? gallerySpecimenTargetRef : undefined}
+                  className="gallery-handoff-target-box"
+                >
+                  <div
+                    className={`gallery-model-host${concealed || behind ? " gallery-model-host--hidden" : ""}`}
+                    aria-hidden={concealed || behind}
+                  >
+                    <PlanktonVisual
+                      plankton={plankton}
+                      offset={slot}
+                      float
                     />
-                  ) : (
-                    <div
-                      className={`gallery-model-host${concealed || behind ? " gallery-model-host--hidden" : ""}`}
-                      aria-hidden={concealed || behind}
-                    >
-                      <PlanktonVisual
-                        plankton={plankton}
-                        offset={slot}
-                        float
-                      />
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </button>

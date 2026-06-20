@@ -120,8 +120,9 @@
           id: "belzebub-hanseni",
           type: "spline",
           url: "/models/Belzebub_hanseni_scene_spliecode.splinecode",
-          galleryZoomScale: 1.28,
-          fillFactor: 0.96,
+          galleryZoomScale: 2.7,
+          exportWhiteCutoff: 220,
+          exportDenoiseMinNeighbors: 5,
         },
       ];
 
@@ -292,6 +293,7 @@
           const name = entity.name?.toLowerCase?.() ?? "";
           if (
             name === "rectangle" ||
+            name.includes("grid") ||
             name.includes("background") ||
             name.endsWith("_bg") ||
             name === "bg"

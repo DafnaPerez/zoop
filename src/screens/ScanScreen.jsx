@@ -10,7 +10,7 @@ export default function ScanScreen({
   onClose,
   onAddToCollection,
   isInCollection,
-  handoffInFlight = false,
+  handoffActive = false,
   scanStageRef,
   handoffShellRef,
 }) {
@@ -24,12 +24,12 @@ export default function ScanScreen({
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === "Escape" && !handoffInFlight) onClose();
+      if (event.key === "Escape") onClose();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, handoffInFlight]);
+  }, [onClose]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -40,13 +40,12 @@ export default function ScanScreen({
   }, []);
 
   const handleAdd = () => {
-    const rect = handoffShellRef?.current?.getBoundingClientRect();
-    if (rect?.width) onAddToCollection(rect);
+    onAddToCollection();
   };
 
   return (
     <div
-      className={`scan-screen${introComplete ? " scan-screen--intro-complete" : ""}${handoffInFlight ? " scan-screen--handoff" : ""}`}
+      className={`scan-screen${introComplete ? " scan-screen--intro-complete" : ""}${handoffActive ? " scan-screen--handoff" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label="Plankton scan"
@@ -61,7 +60,6 @@ export default function ScanScreen({
             type="button"
             className="detail-back-btn scan-result-back"
             onClick={onClose}
-            disabled={handoffInFlight}
           >
             ← Back
           </button>
@@ -134,7 +132,6 @@ export default function ScanScreen({
           type="button"
           className="scan-rescan-btn atlas-btn"
           onClick={onClose}
-          disabled={handoffInFlight}
         >
           Scan another
         </button>
@@ -142,7 +139,7 @@ export default function ScanScreen({
           type="button"
           className="scan-add-btn atlas-btn"
           onClick={handleAdd}
-          disabled={isInCollection || handoffInFlight}
+          disabled={isInCollection}
         >
           {isInCollection ? "Added to collection" : "Add to collection →"}
         </button>

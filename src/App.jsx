@@ -3,11 +3,14 @@ import { planktons } from "./data/planktons";
 import { scanSpecimen } from "./data/scanSpecimen";
 import { usePreventBrowserZoom } from "./hooks/usePreventBrowserZoom";
 import { preloadSplineViewerAssets } from "./components/SplinePlanktonViewer";
+import CollectionHandoffLayer from "./components/CollectionHandoffLayer";
 import HandoffSpecimenLayer from "./components/HandoffSpecimenLayer";
 import HomeScreen from "./screens/HomeScreen";
 import DetailScreen from "./screens/DetailScreen";
 import ScanScreen from "./screens/ScanScreen";
 import "./style.css";
+
+const GALLERY_FOCUS_CLEAR_MS = 500;
 
 function wrapIndex(index, length) {
   return ((index % length) + length) % length;
@@ -17,17 +20,15 @@ export default function App() {
   usePreventBrowserZoom();
   const scanStageRef = useRef(null);
   const handoffShellRef = useRef(null);
-  const galleryDockRef = useRef(null);
+  const gallerySpecimenTargetRef = useRef(null);
   const [selectedId, setSelectedId] = useState(null);
   const [scanAdded, setScanAdded] = useState(false);
   const [scanPreview, setScanPreview] = useState(null);
   const [scanResultOpen, setScanResultOpen] = useState(false);
-  const [scanExiting, setScanExiting] = useState(false);
+  const [collectionHandoff, setCollectionHandoff] = useState(false);
+  const [handoffStartSpecimenRect, setHandoffStartSpecimenRect] = useState(null);
   const [galleryFocusId, setGalleryFocusId] = useState(null);
   const [galleryRestoreId, setGalleryRestoreId] = useState(null);
-  const [handoffStartRect, setHandoffStartRect] = useState(null);
-  const [handoffLanding, setHandoffLanding] = useState(false);
-  const [specimenDocked, setSpecimenDocked] = useState(false);
 
   const collection = useMemo(
     () => (scanAdded ? [...planktons, scanSpecimen] : planktons),
@@ -36,7 +37,6 @@ export default function App() {
 
   const selectedIndex = collection.findIndex((entry) => entry.id === selectedId);
   const selectedPlankton = selectedIndex >= 0 ? collection[selectedIndex] : null;
-  const handoffActive = handoffStartRect != null;
 
   const goToSpecies = useCallback(
     (index) => {
@@ -54,41 +54,28 @@ export default function App() {
     setSelectedId(null);
   }, []);
 
-  const finishReturnHome = useCallback(() => {
+  const handleAddScanSpecimen = useCallback(() => {
+    if (collectionHandoff || scanAdded) return;
+
+    const specimenNode = handoffShellRef.current ?? scanStageRef.current;
+    if (!specimenNode) return;
+
+    setHandoffStartSpecimenRect(specimenNode.getBoundingClientRect());
+    setScanAdded(true);
+    setGalleryFocusId(scanSpecimen.id);
+    setCollectionHandoff(true);
+    setScanPreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  }, [collectionHandoff, scanAdded]);
+
+  const handleCollectionHandoffComplete = useCallback(() => {
+    setCollectionHandoff(false);
+    setHandoffStartSpecimenRect(null);
     setScanResultOpen(false);
-    setScanExiting(false);
-    setHandoffStartRect(null);
-    setHandoffLanding(false);
-    window.setTimeout(() => setGalleryFocusId(null), 400);
+    window.setTimeout(() => setGalleryFocusId(null), GALLERY_FOCUS_CLEAR_MS);
   }, []);
-
-  const handleDockReady = useCallback(() => {
-    if (!handoffLanding) return;
-    setSpecimenDocked(true);
-    finishReturnHome();
-  }, [handoffLanding, finishReturnHome]);
-
-  const handleHandoffComplete = useCallback(() => {
-    setHandoffStartRect(null);
-    setHandoffLanding(true);
-  }, []);
-
-  const handleAddScanSpecimen = useCallback(
-    (startRect) => {
-      if (scanExiting || !startRect) return;
-
-      setHandoffLanding(false);
-      setScanAdded(true);
-      setGalleryFocusId(scanSpecimen.id);
-      setHandoffStartRect(startRect);
-      setScanExiting(true);
-      setScanPreview((current) => {
-        if (current) URL.revokeObjectURL(current);
-        return null;
-      });
-    },
-    [scanExiting],
-  );
 
   const handleScanComplete = useCallback((previewUrl) => {
     setScanPreview(previewUrl);
@@ -99,46 +86,44 @@ export default function App() {
   }, []);
 
   const handleCloseScanResult = useCallback(() => {
-    if (scanExiting) return;
+    if (collectionHandoff) return;
 
     setScanPreview((current) => {
       if (current) URL.revokeObjectURL(current);
       return null;
     });
     setScanResultOpen(false);
-  }, [scanExiting]);
+  }, [collectionHandoff]);
 
-  const showGallery = true;
-  const detailOpen = Boolean(selectedPlankton && !scanResultOpen);
-  const galleryConcealed = scanResultOpen && !scanExiting;
-  const showHandoffLayer = scanResultOpen || specimenDocked;
+  const detailOpen = Boolean(
+    selectedPlankton && !scanResultOpen && !collectionHandoff,
+  );
+  const galleryConcealed = scanResultOpen && !collectionHandoff;
   const galleryFocusPlanktonId = galleryFocusId ?? galleryRestoreId;
-  const scanFlowActive = scanResultOpen || handoffActive || handoffLanding;
 
   useEffect(() => {
-    if (!showGallery || galleryFocusId || !galleryRestoreId) return undefined;
+    if (galleryFocusId || !galleryRestoreId) return undefined;
 
     const frame = requestAnimationFrame(() => {
       setGalleryRestoreId(null);
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [showGallery, galleryFocusId, galleryRestoreId]);
+  }, [galleryFocusId, galleryRestoreId]);
 
   return (
     <div className="app-stage">
       <HomeScreen
-          collection={collection}
-          onSelect={handleSelectPlankton}
-          onScanComplete={handleScanComplete}
-          onScanPanelChange={undefined}
-          focusPlanktonId={galleryFocusPlanktonId}
-          handoffActive={handoffActive || handoffLanding}
-          galleryDockRef={galleryDockRef}
-          specimenDocked={specimenDocked}
-          concealed={galleryConcealed}
-          behind={detailOpen}
-        />
+        collection={collection}
+        onSelect={handleSelectPlankton}
+        onScanComplete={handleScanComplete}
+        onScanPanelChange={undefined}
+        focusPlanktonId={galleryFocusPlanktonId}
+        concealed={galleryConcealed}
+        collectionHandoff={collectionHandoff}
+        gallerySpecimenTargetRef={gallerySpecimenTargetRef}
+        behind={detailOpen}
+      />
 
       {scanResultOpen ? (
         <ScanScreen
@@ -146,29 +131,32 @@ export default function App() {
           onClose={handleCloseScanResult}
           onAddToCollection={handleAddScanSpecimen}
           isInCollection={scanAdded}
-          handoffInFlight={handoffActive || handoffLanding}
+          handoffActive={collectionHandoff}
           scanStageRef={scanStageRef}
           handoffShellRef={handoffShellRef}
         />
       ) : null}
 
-      {showHandoffLayer ? (
+      {scanResultOpen ? (
         <HandoffSpecimenLayer
           scanStageRef={scanStageRef}
           handoffShellRef={handoffShellRef}
-          galleryDockRef={galleryDockRef}
-          handoffActive={handoffActive}
-          handoffLanding={handoffLanding}
-          handoffStartRect={handoffStartRect}
-          specimenDocked={specimenDocked}
           scanOpen={scanResultOpen}
           detailOpen={detailOpen}
-          onHandoffComplete={handleHandoffComplete}
-          onDockReady={handleDockReady}
+          collectionHandoff={collectionHandoff}
         />
       ) : null}
 
-      {selectedPlankton && !scanResultOpen ? (
+      {collectionHandoff ? (
+        <CollectionHandoffLayer
+          active={collectionHandoff}
+          startSpecimenRect={handoffStartSpecimenRect}
+          specimenTargetRef={gallerySpecimenTargetRef}
+          onComplete={handleCollectionHandoffComplete}
+        />
+      ) : null}
+
+      {selectedPlankton && !scanResultOpen && !collectionHandoff ? (
         <DetailScreen
           plankton={selectedPlankton}
           speciesIndex={selectedIndex}

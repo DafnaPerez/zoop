@@ -6,6 +6,7 @@ import { preloadSplineViewerAssets } from "./components/SplinePlanktonViewer";
 import CollectionHandoffLayer from "./components/CollectionHandoffLayer";
 import HandoffSpecimenLayer from "./components/HandoffSpecimenLayer";
 import HomeScreen from "./screens/HomeScreen";
+import CompareScreen from "./screens/CompareScreen";
 import DetailScreen from "./screens/DetailScreen";
 import ScanScreen from "./screens/ScanScreen";
 import "./style.css";
@@ -29,6 +30,7 @@ export default function App() {
   const [handoffStartSpecimenRect, setHandoffStartSpecimenRect] = useState(null);
   const [galleryFocusId, setGalleryFocusId] = useState(null);
   const [galleryRestoreId, setGalleryRestoreId] = useState(null);
+  const [compareId, setCompareId] = useState(null);
 
   const collection = useMemo(
     () => (scanAdded ? [...planktons, scanSpecimen] : planktons),
@@ -52,6 +54,15 @@ export default function App() {
 
   const handleBackFromDetail = useCallback(() => {
     setSelectedId(null);
+    setCompareId(null);
+  }, []);
+
+  const handleCompareSelect = useCallback((id) => {
+    setCompareId(id);
+  }, []);
+
+  const handleBackFromCompare = useCallback(() => {
+    setCompareId(null);
   }, []);
 
   const handleAddScanSpecimen = useCallback(() => {
@@ -95,8 +106,14 @@ export default function App() {
     setScanResultOpen(false);
   }, [collectionHandoff]);
 
+  const comparePlankton = compareId
+    ? collection.find((entry) => entry.id === compareId) ?? null
+    : null;
+  const compareOpen = Boolean(
+    selectedPlankton && comparePlankton && !scanResultOpen && !collectionHandoff,
+  );
   const detailOpen = Boolean(
-    selectedPlankton && !scanResultOpen && !collectionHandoff,
+    selectedPlankton && !compareOpen && !scanResultOpen && !collectionHandoff,
   );
   const galleryConcealed = scanResultOpen && !collectionHandoff;
   const galleryFocusPlanktonId = galleryFocusId ?? galleryRestoreId;
@@ -111,6 +128,15 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [galleryFocusId, galleryRestoreId]);
 
+  useEffect(() => {
+    if (!compareOpen || !comparePlankton || !selectedPlankton) return;
+
+    [selectedPlankton, comparePlankton].forEach((plankton) => {
+      if (plankton.viewer !== "spline") return;
+      preloadSplineViewerAssets(plankton.splineViewer, plankton.splineUrl);
+    });
+  }, [compareOpen, comparePlankton, selectedPlankton]);
+
   return (
     <div className="app-stage">
       <HomeScreen
@@ -122,7 +148,7 @@ export default function App() {
         concealed={galleryConcealed}
         collectionHandoff={collectionHandoff}
         gallerySpecimenTargetRef={gallerySpecimenTargetRef}
-        behind={detailOpen}
+        behind={detailOpen || compareOpen}
       />
 
       {scanResultOpen ? (
@@ -156,14 +182,24 @@ export default function App() {
         />
       ) : null}
 
-      {selectedPlankton && !scanResultOpen && !collectionHandoff ? (
+      {compareOpen ? (
+        <CompareScreen
+          leftPlankton={selectedPlankton}
+          rightPlankton={comparePlankton}
+          onBack={handleBackFromCompare}
+        />
+      ) : null}
+
+      {detailOpen ? (
         <DetailScreen
           plankton={selectedPlankton}
+          collection={collection}
           speciesIndex={selectedIndex}
           collectionLength={collection.length}
           onBack={handleBackFromDetail}
           onPrev={() => goToSpecies(selectedIndex - 1)}
           onNext={() => goToSpecies(selectedIndex + 1)}
+          onCompare={handleCompareSelect}
         />
       ) : null}
     </div>

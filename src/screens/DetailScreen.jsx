@@ -2,6 +2,7 @@ import { Suspense, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { BlueprintFrame, BlueprintScaffold } from "../components/BlueprintScaffold";
 import DetailSpecimenScale from "../components/DetailSpecimenScale";
+import PlanktonComparePicker from "../components/PlanktonComparePicker";
 import PlanktonModel from "../components/PlanktonModel";
 import SplinePlanktonViewer from "../components/SplinePlanktonViewer";
 import { getPlanktonSplineZoomScale } from "../utils/planktonSplineZoom";
@@ -18,11 +19,13 @@ const DETAIL_MODEL_SCALE = 1.75 * 0.7;
 
 export default function DetailScreen({
   plankton,
+  collection,
   speciesIndex,
   collectionLength,
   onBack,
   onPrev,
   onNext,
+  onCompare,
 }) {
   const isSpline = plankton.viewer === "spline";
 
@@ -44,6 +47,16 @@ export default function DetailScreen({
       <div className="gallery-glow gallery-glow-primary" aria-hidden="true" />
       <div className="gallery-glow gallery-glow-secondary" aria-hidden="true" />
       <div className="detail-ambient-glow" aria-hidden="true" />
+
+      <header className="detail-header">
+        <div className="detail-header-actions">
+          <PlanktonComparePicker
+            planktons={collection}
+            excludeId={plankton.id}
+            onSelect={onCompare}
+          />
+        </div>
+      </header>
 
       <div className="detail-layout">
         <aside className="detail-sidebar detail-sidebar--left detail-reveal detail-reveal--1">

@@ -28,7 +28,10 @@ export const planktons = [
       detailZoomScale: 1.35,
       galleryZoomScale: 1.35,
       galleryImage: galleryImage("calanus-finmarchicus"),
-      sketches: [publicUrl("/sketches/Calanus1.png"), publicUrl("/sketches/calanus2.png")],
+      sketches: [
+        publicUrl("/sketches/Calanus finmarchicus1.png"),
+        publicUrl("/sketches/Calanus finmarchicus2.png"),
+      ],
       layout: { top: "6%", left: "4%", width: "20%", zIndex: 1 },
     },
     {

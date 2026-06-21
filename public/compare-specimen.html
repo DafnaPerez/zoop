@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Compare specimen</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      #host {
+        width: 100%;
+        height: 100%;
+      }
+      spline-viewer {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: transparent !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="host"></div>
+    <script type="module">
+      const params = new URLSearchParams(window.location.search);
+      const sceneUrl = params.get("scene");
+      const zoomScale = Number(params.get("zoom") ?? "0.945");
+      const fillFactor = Number(params.get("fill") ?? "0.68");
+      const maxZoom = Number(params.get("maxZoom") ?? "14");
+
+      if (!sceneUrl) {
+        throw new Error("Missing scene parameter");
+      }
+
+      const FRAMING_PADDING = 1.15;
+      const SPLINE_ZOOM_OUT_MIN_FACTOR = 1;
+      const SPLINE_ZOOM_IN_MAX_FACTOR = 3;
+      const ZOOM_WHEEL_SENSITIVITY = 1.05;
+      const ZOOM_SMOOTHING = 0.3;
+      const ZOOM_STOP_EPSILON = 0.0004;
+
+      function wait(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function loadViewerScript() {
+        return new Promise((resolve, reject) => {
+          if (customElements.get("spline-viewer")) {
+            resolve();
+            return;
+          }
+          const script = document.createElement("script");
+          script.type = "module";
+          script.src = new URL(
+            "models/Calanus_finmarchicus_spline_viewer.js",
+            document.baseURI,
+          ).pathname;
+          script.onload = () => resolve();
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+
+      function isSceneGroupBounds(size) {
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const minDim = Math.min(size.x, size.y, size.z);
+        return maxDim > 500 && minDim / maxDim > 0.8;
+      }
+
+      function getMeshBounds(spline) {
+        let meshEntity = null;
+        let largestFallback = null;
+        let largestVolume = 0;
+
+        spline._scene?.traverseEntity?.((entity) => {
+          const verts = entity.singleBBox?.vertices;
+          if (!verts?.length) return;
+
+          const xs = verts.map((v) => v.x);
+          const ys = verts.map((v) => v.y);
+          const zs = verts.map((v) => v.z);
+          const size = {
+            x: Math.max(...xs) - Math.min(...xs),
+            y: Math.max(...ys) - Math.min(...ys),
+            z: Math.max(...zs) - Math.min(...zs),
+          };
+          if (!size.x && !size.y && !size.z) return;
+
+          const bounds = {
+            center: {
+              x: (Math.min(...xs) + Math.max(...xs)) / 2,
+              y: (Math.min(...ys) + Math.max(...ys)) / 2,
+              z: (Math.min(...zs) + Math.max(...zs)) / 2,
+            },
+            size,
+          };
+
+          if (entity.name === "mesh_node") {
+            meshEntity = bounds;
+            return;
+          }
+
+          if (isSceneGroupBounds(size)) return;
+
+          const volume = size.x * size.y * size.z;
+          if (volume > largestVolume) {
+            largestVolume = volume;
+            largestFallback = bounds;
+          }
+        });
+
+        return meshEntity ?? largestFallback;
+      }
+
+      function hideSplineSceneBackground(spline) {
+        spline?._scene?.traverseEntity?.((entity) => {
+          const name = entity.name?.toLowerCase?.() ?? "";
+          if (
+            name === "rectangle" ||
+            name.includes("grid") ||
+            name.includes("background") ||
+            name.endsWith("_bg") ||
+            name === "bg"
+          ) {
+            entity.visible = false;
+          }
+        });
+        spline?.setBackgroundColor?.("transparent");
+      }
+
+      function hideSplineChrome(viewer) {
+        const root = viewer.shadowRoot;
+        if (!root) return;
+
+        root.querySelector("#logo")?.style.setProperty("display", "none");
+        root.querySelector("#hint-drag")?.style.setProperty("display", "none");
+        root.querySelector("canvas")?.style.setProperty("background", "transparent");
+        root.querySelector("canvas")?.style.setProperty(
+          "background-color",
+          "transparent",
+        );
+      }
+
+      function resizeSplineViewer(viewer) {
+        const spline = viewer._spline;
+        const container = viewer.parentElement;
+        if (!spline || !container) return;
+
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        if (!width || !height) return;
+
+        spline._viewportWidth = width;
+        spline._viewportHeight = height;
+
+        if (spline._frameView) {
+          spline._frameView.enableResponsive = true;
+          if (spline._frameView.frameSize) {
+            spline._frameView.frameSize.x = width;
+            spline._frameView.frameSize.y = height;
+          }
+        }
+
+        spline._resize?.(true);
+        hideSplineSceneBackground(spline);
+      }
+
+      function getOrbitControls(spline) {
+        return spline?._controls?.orbitControls;
+      }
+
+      function applyOrbitZoomLimits(controls, limits) {
+        if (!controls || !limits) return;
+
+        controls.zoomLimitsEnabled = true;
+        controls.minZoom = limits.min;
+        controls.maxZoom = limits.max;
+        controls.zoomLimits = { min: limits.min, max: limits.max };
+      }
+
+      function configureInteractiveOrbit(controls) {
+        if (!controls) return;
+
+        controls.enableRotate = true;
+        controls.enablePan = true;
+        controls.enableZoom = true;
+      }
+
+      function clampZoomTarget(viewer, value) {
+        const limits = viewer._splineZoomLimits;
+        if (!limits || !Number.isFinite(value)) return value;
+        return Math.min(limits.max, Math.max(limits.min, value));
+      }
+
+      function applySplineZoom(controls, spline, zoom) {
+        if (!controls?.object || !Number.isFinite(zoom)) return;
+
+        controls.object.zoom = zoom;
+        controls.object.updateProjectionMatrix();
+        controls.zoomChanged = true;
+        controls.update?.();
+        spline?.requestRender?.();
+      }
+
+      function startSmoothZoomAnimation(viewer, controls, spline) {
+        if (viewer._zoomAnimFrame) return;
+
+        const step = () => {
+          const limits = viewer._splineZoomLimits;
+          if (!limits || !controls?.object) {
+            viewer._zoomAnimFrame = null;
+            return;
+          }
+
+          const current = controls.object.zoom;
+          const target = clampZoomTarget(viewer, viewer._zoomTarget ?? current);
+          const diff = target - current;
+
+          if (Math.abs(diff) <= ZOOM_STOP_EPSILON) {
+            if (current !== target) {
+              applySplineZoom(controls, spline, target);
+            }
+            viewer._zoomAnimFrame = null;
+            return;
+          }
+
+          const t = Math.min(
+            1,
+            Math.abs(diff) / Math.max(limits.max - limits.min, 1),
+          );
+          const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+          const blend = ZOOM_SMOOTHING + ease * 0.08;
+          const next = current + diff * blend;
+
+          applySplineZoom(controls, spline, next);
+          viewer._zoomAnimFrame = requestAnimationFrame(step);
+        };
+
+        viewer._zoomAnimFrame = requestAnimationFrame(step);
+      }
+
+      function isEventOverViewer(event, viewer, host) {
+        const path = event.composedPath?.() ?? [];
+        if (path.includes(viewer) || (host != null && path.includes(host))) {
+          return true;
+        }
+
+        const target = event.target;
+        return Boolean(
+          target &&
+            (viewer.shadowRoot?.contains(target) ||
+              host?.contains(target) ||
+              viewer.contains(target)),
+        );
+      }
+
+      function applyOrbitRotation(controls, spline, deltaX, deltaY) {
+        if (!controls || controls.enableRotate === false) return;
+        if (!deltaX && !deltaY) return;
+
+        controls.rotateLeft(-deltaX * 0.005);
+        controls.rotateUp(-deltaY * 0.005);
+        controls.update?.();
+        spline?.requestRender?.();
+      }
+
+      function installSplineOrbitInteraction(viewer, controls, spline, host) {
+        if (!controls || !spline || !host || viewer._orbitInteractionInstalled) return;
+
+        viewer._orbitInteractionInstalled = true;
+        let dragging = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        const onPointerDown = (event) => {
+          if (event.button !== 0) return;
+          if (!isEventOverViewer(event, viewer, host)) return;
+
+          dragging = true;
+          lastX = event.clientX;
+          lastY = event.clientY;
+          host.setPointerCapture(event.pointerId);
+          event.preventDefault();
+        };
+
+        const onPointerMove = (event) => {
+          if (!dragging) return;
+
+          const dx = event.clientX - lastX;
+          const dy = event.clientY - lastY;
+          lastX = event.clientX;
+          lastY = event.clientY;
+          applyOrbitRotation(controls, spline, dx, dy);
+          event.preventDefault();
+        };
+
+        const endDrag = (event) => {
+          if (!dragging) return;
+          dragging = false;
+          if (host.hasPointerCapture?.(event.pointerId)) {
+            host.releasePointerCapture(event.pointerId);
+          }
+        };
+
+        host.addEventListener("pointerdown", onPointerDown);
+        host.addEventListener("pointermove", onPointerMove);
+        host.addEventListener("pointerup", endDrag);
+        host.addEventListener("pointercancel", endDrag);
+      }
+
+      function installSmoothSplineZoom(viewer, controls, spline) {
+        if (!controls || !spline || viewer._smoothZoomInstalled) return;
+
+        const host = viewer.parentElement;
+        if (!host) return;
+
+        viewer._smoothZoomInstalled = true;
+        viewer._zoomTarget = controls.object?.zoom ?? viewer._baseSplineZoom;
+
+        const onWheel = (event) => {
+          if (!viewer._splineZoomLimits) return;
+          if (!isEventOverViewer(event, viewer, host)) return;
+
+          const { deltaY } = event;
+          const isBrowserZoomGesture = event.ctrlKey || event.metaKey;
+
+          if (isBrowserZoomGesture) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            if (controls.enableZoom === false || !deltaY) return;
+
+            const pinchBoost = 1.6;
+            const step =
+              Math.min(Math.abs(deltaY) / 380, 0.34) *
+              ZOOM_WHEEL_SENSITIVITY *
+              pinchBoost;
+            const factor = deltaY < 0 ? 1 + step : 1 - step;
+            const current = viewer._zoomTarget ?? controls.object.zoom;
+
+            viewer._zoomTarget = clampZoomTarget(viewer, current * factor);
+            startSmoothZoomAnimation(viewer, controls, spline);
+          }
+        };
+
+        window.addEventListener("wheel", onWheel, { capture: true, passive: false });
+      }
+
+      function getFramingSize(bounds) {
+        const { x, y, z } = bounds.size;
+        const maxPlanar = Math.max(x, z);
+
+        if (x / Math.max(y, 1) > 1.35 && maxPlanar < 280) {
+          const estHeight = Math.max(y, maxPlanar * 0.42, x * 0.22);
+          return { x, y: estHeight, z };
+        }
+
+        return { x, y, z };
+      }
+
+      function frameSpline(viewer, { preserveUserZoom = false } = {}) {
+        const spline = viewer._spline;
+        const container = viewer.parentElement;
+        const bounds = getMeshBounds(spline);
+        const controls = getOrbitControls(spline);
+        const camera = spline?._camera;
+        if (!bounds || !controls || !camera || !container) return false;
+
+        const framing = getFramingSize(bounds);
+        const size = {
+          x: framing.x * FRAMING_PADDING,
+          y: framing.y * FRAMING_PADDING,
+          z: framing.z * FRAMING_PADDING,
+        };
+        const { center } = bounds;
+
+        const dx = center.x - controls.target.x;
+        const dy = center.y - controls.target.y;
+        const dz = center.z - controls.target.z;
+        controls.target.set(center.x, center.y, center.z);
+        camera.position.x += dx;
+        camera.position.y += dy;
+        camera.position.z += dz;
+        controls.update?.();
+
+        const zoomForHeight = container.clientHeight / (size.y / fillFactor);
+        const zoomForWidth = container.clientWidth / (size.x / fillFactor);
+        const isWideRibbon =
+          bounds.size.x / Math.max(bounds.size.y, 1) > 1.35 &&
+          Math.max(bounds.size.x, bounds.size.z) < 280;
+        const fitContain = params.get("fitContain") === "1";
+        const targetZoom =
+          fitContain || !isWideRibbon
+            ? Math.min(zoomForHeight, zoomForWidth)
+            : zoomForHeight;
+        const baseZoom = Math.min(targetZoom * zoomScale, maxZoom);
+
+        if (Number.isFinite(baseZoom) && baseZoom > 0) {
+          viewer._baseSplineZoom = baseZoom;
+          viewer._splineZoomLimits = {
+            min: baseZoom * SPLINE_ZOOM_OUT_MIN_FACTOR,
+            max: baseZoom * SPLINE_ZOOM_IN_MAX_FACTOR,
+          };
+
+          if (!preserveUserZoom || !viewer._initialFramed) {
+            viewer._zoomTarget = baseZoom;
+            spline.setZoom?.(baseZoom);
+          }
+
+          applyOrbitZoomLimits(controls, viewer._splineZoomLimits);
+        }
+
+        configureInteractiveOrbit(controls);
+
+        if (!viewer._interactionInstalled) {
+          installSmoothSplineZoom(viewer, controls, spline);
+          installSplineOrbitInteraction(viewer, controls, spline, container);
+          viewer._interactionInstalled = true;
+        }
+
+        controls.update?.();
+        spline.requestRender?.();
+        viewer._initialFramed = true;
+        return true;
+      }
+
+      async function mount() {
+        await loadViewerScript();
+
+        const host = document.getElementById("host");
+        const viewer = document.createElement("spline-viewer");
+        viewer.setAttribute("url", sceneUrl);
+        viewer.setAttribute("background", "transparent");
+        viewer.setAttribute("loading", "eager");
+        viewer.setAttribute("hint", "false");
+        viewer.setAttribute("events-target", "local");
+        host.appendChild(viewer);
+
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("Spline load timeout")),
+            120000,
+          );
+          viewer.addEventListener(
+            "load-complete",
+            () => {
+              clearTimeout(timeout);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+
+        await wait(200);
+        hideSplineChrome(viewer);
+        hideSplineSceneBackground(viewer._spline);
+        resizeSplineViewer(viewer);
+        await wait(100);
+        frameSpline(viewer);
+        await wait(200);
+        hideSplineSceneBackground(viewer._spline);
+        resizeSplineViewer(viewer);
+        frameSpline(viewer);
+
+        window.addEventListener("resize", () => {
+          resizeSplineViewer(viewer);
+          if (viewer._initialFramed) {
+            viewer._spline?.requestRender?.();
+            return;
+          }
+          frameSpline(viewer);
+        });
+      }
+
+      mount().catch((error) => {
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getHotspotWorldPosition } from "../utils/splineHotspotProjection";
 import { SHARED_SPLINE_VIEWER } from "../utils/splineRuntime";
 
 let viewerRuntimePromise = null;
@@ -146,6 +147,132 @@ function resizeSplineViewer(viewer) {
   spline._resize?.(true);
   hideSplineSceneBackground(spline);
   spline.setBackgroundColor("transparent");
+}
+
+function getOrbitPolar(controls) {
+  if (typeof controls.getPolarAngle === "function") {
+    return controls.getPolarAngle();
+  }
+
+  const camera = controls?.object;
+  const target = controls?.target;
+  if (!camera || !target) return Math.PI / 2;
+
+  const dx = camera.position.x - target.x;
+  const dy = camera.position.y - target.y;
+  const dz = camera.position.z - target.z;
+  const radius = Math.hypot(dx, dy, dz) || 1;
+  return Math.acos(Math.max(-1, Math.min(1, dy / radius)));
+}
+
+function setOrbitAngles(controls, azimuth, polar) {
+  if (
+    typeof controls.setAzimuthalAngle === "function" &&
+    typeof controls.setPolarAngle === "function"
+  ) {
+    controls.setAzimuthalAngle(azimuth);
+    controls.setPolarAngle(polar);
+    controls.update?.();
+    return;
+  }
+
+  const camera = controls?.object;
+  const target = controls?.target;
+  if (!camera || !target) return;
+
+  const dx = camera.position.x - target.x;
+  const dy = camera.position.y - target.y;
+  const dz = camera.position.z - target.z;
+  const radius = Math.hypot(dx, dy, dz) || 1;
+  const horizontal = radius * Math.sin(polar);
+
+  camera.position.set(
+    target.x + horizontal * Math.sin(azimuth),
+    target.y + radius * Math.cos(polar),
+    target.z + horizontal * Math.cos(azimuth),
+  );
+  camera.lookAt(target);
+  controls.update?.();
+}
+
+function shortestAngleDelta(from, to) {
+  let delta = to - from;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  return delta;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function stopHotspotFocus(viewer) {
+  if (viewer._hotspotFocusFrame) {
+    cancelAnimationFrame(viewer._hotspotFocusFrame);
+    viewer._hotspotFocusFrame = null;
+  }
+}
+
+export function focusSplineHotspotOnHost(host, hotspot, { durationMs = 900 } = {}) {
+  const viewer = getSplineViewerFromContainer(host);
+  if (!viewer?._spline || !hotspot) return false;
+
+  const spline = viewer._spline;
+  const controls = getOrbitControls(spline);
+  const worldPoint = getHotspotWorldPosition(spline, hotspot);
+  if (!controls || !worldPoint) return false;
+
+  stopIntroTurntable(viewer);
+  stopHotspotFocus(viewer);
+
+  const { target } = controls;
+  const offsetX = worldPoint.x - target.x;
+  const offsetY = worldPoint.y - target.y;
+  const offsetZ = worldPoint.z - target.z;
+  const length = Math.hypot(offsetX, offsetY, offsetZ);
+  if (length < 1e-6) return false;
+
+  const viewX = offsetX / length;
+  const viewY = offsetY / length;
+  const viewZ = offsetZ / length;
+
+  const minPolar = controls.minPolarAngle ?? 0.12;
+  const maxPolar = controls.maxPolarAngle ?? Math.PI - 0.12;
+  const targetAzimuth = Math.atan2(viewX, viewZ);
+  const targetPolar = Math.max(
+    minPolar,
+    Math.min(maxPolar, Math.acos(Math.max(-1, Math.min(1, viewY)))),
+  );
+
+  const startAzimuth = getOrbitAzimuth(controls);
+  const startPolar = getOrbitPolar(controls);
+  const deltaAzimuth = shortestAngleDelta(startAzimuth, targetAzimuth);
+  const deltaPolar = targetPolar - startPolar;
+  const startTime = performance.now();
+
+  controls.enableRotate = false;
+  controls.autoRotate = false;
+
+  const step = (now) => {
+    const elapsed = now - startTime;
+    const t = easeInOutCubic(Math.min(1, elapsed / durationMs));
+
+    setOrbitAngles(controls, startAzimuth + deltaAzimuth * t, startPolar + deltaPolar * t);
+    spline.requestRender?.();
+
+    if (elapsed < durationMs) {
+      viewer._hotspotFocusFrame = requestAnimationFrame(step);
+      return;
+    }
+
+    viewer._hotspotFocusFrame = null;
+    setOrbitAngles(controls, targetAzimuth, targetPolar);
+    controls.enableRotate = true;
+    spline.requestRender?.();
+  };
+
+  viewer._hotspotFocusFrame = requestAnimationFrame(step);
+  return true;
 }
 
 function getOrbitAzimuth(controls) {
@@ -982,6 +1109,7 @@ export default function SplinePlanktonViewer({
       viewer._orbitInteractionCleanup?.();
       stopRotationHold(viewer);
       stopIntroTurntable(viewer);
+      stopHotspotFocus(viewer);
       (viewer._configureTimers ?? []).forEach(({ raf, id }) => {
         if (raf) cancelAnimationFrame(id);
         else window.clearTimeout(id);

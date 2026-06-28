@@ -7,7 +7,8 @@ export default function HomeScreen({
   collection,
   onSelect,
   onScanComplete,
-  onScanPanelChange,
+  scanPanelOpen,
+  onScanPanelOpenChange,
   focusPlanktonId,
   concealed,
   collectionHandoff = false,
@@ -26,7 +27,8 @@ export default function HomeScreen({
       planktons={collection}
       onSelect={onSelect}
       onScanComplete={onScanComplete}
-      onScanPanelChange={onScanPanelChange}
+      scanPanelOpen={scanPanelOpen}
+      onScanPanelOpenChange={onScanPanelOpenChange}
       focusPlanktonId={focusPlanktonId}
       concealed={concealed}
       collectionHandoff={collectionHandoff}

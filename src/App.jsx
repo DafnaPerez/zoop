@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { planktons } from "./data/planktons";
-import { scanSpecimen } from "./data/scanSpecimen";
+import { scanSpecimen, SCAN_PROCESSING_MS } from "./data/scanSpecimen";
 import { usePreventBrowserZoom } from "./hooks/usePreventBrowserZoom";
 import { preloadSplineViewerAssets } from "./components/SplinePlanktonViewer";
 import CollectionHandoffLayer from "./components/CollectionHandoffLayer";
@@ -22,15 +22,26 @@ export default function App() {
   const scanStageRef = useRef(null);
   const handoffShellRef = useRef(null);
   const gallerySpecimenTargetRef = useRef(null);
+  const rescanTimerRef = useRef(null);
   const [selectedId, setSelectedId] = useState(null);
   const [scanAdded, setScanAdded] = useState(false);
   const [scanPreview, setScanPreview] = useState(null);
   const [scanResultOpen, setScanResultOpen] = useState(false);
+  const [scanProcessing, setScanProcessing] = useState(false);
+  const [scanPanelOpen, setScanPanelOpen] = useState(false);
   const [collectionHandoff, setCollectionHandoff] = useState(false);
   const [handoffStartSpecimenRect, setHandoffStartSpecimenRect] = useState(null);
   const [galleryFocusId, setGalleryFocusId] = useState(null);
   const [galleryRestoreId, setGalleryRestoreId] = useState(null);
   const [compareId, setCompareId] = useState(null);
+
+  useEffect(() => {
+    return () => {
+      if (rescanTimerRef.current) {
+        window.clearTimeout(rescanTimerRef.current);
+      }
+    };
+  }, []);
 
   const collection = useMemo(
     () => (scanAdded ? [...planktons, scanSpecimen] : planktons),
@@ -85,10 +96,12 @@ export default function App() {
     setCollectionHandoff(false);
     setHandoffStartSpecimenRect(null);
     setScanResultOpen(false);
+    setScanPanelOpen(false);
     window.setTimeout(() => setGalleryFocusId(null), GALLERY_FOCUS_CLEAR_MS);
   }, []);
 
   const handleScanComplete = useCallback((previewUrl) => {
+    setScanPanelOpen(false);
     setScanPreview(previewUrl);
     setScanResultOpen(true);
     window.requestAnimationFrame(() => {
@@ -97,14 +110,46 @@ export default function App() {
   }, []);
 
   const handleCloseScanResult = useCallback(() => {
-    if (collectionHandoff) return;
+    if (collectionHandoff || scanProcessing) return;
+
+    if (rescanTimerRef.current) {
+      window.clearTimeout(rescanTimerRef.current);
+      rescanTimerRef.current = null;
+    }
 
     setScanPreview((current) => {
       if (current) URL.revokeObjectURL(current);
       return null;
     });
     setScanResultOpen(false);
-  }, [collectionHandoff]);
+    setScanProcessing(false);
+    setScanPanelOpen(false);
+  }, [collectionHandoff, scanProcessing]);
+
+  const handleRescanFile = useCallback((file) => {
+    if (collectionHandoff || scanProcessing) return;
+    if (!file?.type.startsWith("image/")) return;
+
+    if (rescanTimerRef.current) {
+      window.clearTimeout(rescanTimerRef.current);
+      rescanTimerRef.current = null;
+    }
+
+    setScanPreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+
+    const previewUrl = URL.createObjectURL(file);
+    setScanPreview(previewUrl);
+    setScanProcessing(true);
+    preloadSplineViewerAssets(scanSpecimen.splineViewer, scanSpecimen.splineUrl);
+
+    rescanTimerRef.current = window.setTimeout(() => {
+      rescanTimerRef.current = null;
+      setScanProcessing(false);
+    }, SCAN_PROCESSING_MS);
+  }, [collectionHandoff, scanProcessing]);
 
   const comparePlankton = compareId
     ? collection.find((entry) => entry.id === compareId) ?? null
@@ -143,7 +188,8 @@ export default function App() {
         collection={collection}
         onSelect={handleSelectPlankton}
         onScanComplete={handleScanComplete}
-        onScanPanelChange={undefined}
+        scanPanelOpen={scanPanelOpen}
+        onScanPanelOpenChange={setScanPanelOpen}
         focusPlanktonId={galleryFocusPlanktonId}
         concealed={galleryConcealed}
         collectionHandoff={collectionHandoff}
@@ -155,6 +201,8 @@ export default function App() {
         <ScanScreen
           uploadPreview={scanPreview}
           onClose={handleCloseScanResult}
+          onRescanFile={handleRescanFile}
+          scanProcessing={scanProcessing}
           onAddToCollection={handleAddScanSpecimen}
           isInCollection={scanAdded}
           handoffActive={collectionHandoff}
@@ -186,7 +234,10 @@ export default function App() {
         <CompareScreen
           leftPlankton={selectedPlankton}
           rightPlankton={comparePlankton}
+          collection={collection}
           onBack={handleBackFromCompare}
+          onChangePrimary={setSelectedId}
+          onChangeComparison={setCompareId}
         />
       ) : null}
 

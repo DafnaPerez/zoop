@@ -53,7 +53,7 @@ function getCarouselMetrics(visualOffset, slotOffset) {
     opacity = lerp(1, 0.9, t);
     y = visualDistance * SIDE_OFFSET_Y;
     x = visualOffset * INNER_OFFSET_X;
-    zIndex = t < 0.35 ? 30 : 20;
+    zIndex = Math.round(lerp(30, 20, visualDistance));
   } else {
     const t = clamp01(visualDistance - 1);
     scale = lerp(INNER_SCALE, OUTER_SCALE, t);
@@ -64,8 +64,9 @@ function getCarouselMetrics(visualOffset, slotOffset) {
       OUTER_OFFSET_Y + (slotOffset > 0 ? OUTER_RIGHT_EXTRA_Y : 0),
       t,
     );
-    x = sign * (visualDistance * SIDE_OFFSET_X - OUTER_X_INSET);
-    zIndex = 10;
+    const outerX = visualDistance * SIDE_OFFSET_X - OUTER_X_INSET;
+    x = sign * lerp(INNER_OFFSET_X, outerX, t);
+    zIndex = Math.round(lerp(20, 10, t));
   }
 
   return {
@@ -117,7 +118,8 @@ export default function PlanktonGallery({
   collectionHandoff = false,
   gallerySpecimenTargetRef = null,
   behind = false,
-  onScanPanelChange = null,
+  scanPanelOpen,
+  onScanPanelOpenChange = null,
   onScanPhaseChange = null,
 }) {
   const [activeIndex, setActiveIndex] = useState(() =>
@@ -401,7 +403,8 @@ export default function PlanktonGallery({
           <div className="gallery-header-actions">
             <PlanktonScan
               onScanComplete={onScanComplete}
-              onExpandedChange={onScanPanelChange}
+              expanded={scanPanelOpen}
+              onExpandedChange={onScanPanelOpenChange}
               onScanPhaseChange={onScanPhaseChange}
             />
             <PlanktonSearch
@@ -456,12 +459,8 @@ export default function PlanktonGallery({
               onClick={() => handleItemClick(index, slot)}
               aria-label={plankton.name}
               aria-current={slot === 0 ? "true" : undefined}
-              title={slot === 0 ? "Open species details" : undefined}
             >
-              <div
-                className="gallery-item-inner"
-                style={{ animationDelay: `${Math.abs(slot) * 0.35}s` }}
-              >
+              <div className="gallery-item-inner">
                 <div
                   ref={isHandoffTarget ? gallerySpecimenTargetRef : undefined}
                   className="gallery-handoff-target-box"

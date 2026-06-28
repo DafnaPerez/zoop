@@ -10,6 +10,8 @@ export function getPlanktonSplineZoomScale(plankton, { context = "detail" } = {}
           plankton.galleryZoomScale ??
           plankton.detailZoomScale ??
           SEARCH_THUMB_ZOOM_DEFAULT)
+        : context === "compare"
+          ? (plankton.compareZoomScale ?? plankton.detailZoomScale ?? 1)
         : (plankton.detailZoomScale ?? 1);
 
   return DETAIL_SPLINE_ZOOM * multiplier;

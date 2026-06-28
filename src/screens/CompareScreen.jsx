@@ -1,13 +1,20 @@
 import { Suspense, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { BlueprintFrame, BlueprintScaffold } from "../components/BlueprintScaffold";
+import PlanktonComparePicker from "../components/PlanktonComparePicker";
 import PlanktonModel from "../components/PlanktonModel";
 import { buildComparisonSummary } from "../utils/planktonComparison";
 import { getCompareSpecimenIframeSrc } from "../utils/compareSpecimenIframe";
 
 const DETAIL_MODEL_SCALE = 1.75 * 0.7;
 
-function CompareSpecimenColumn({ plankton, side }) {
+function CompareSpecimenColumn({
+  plankton,
+  side,
+  collection,
+  otherId,
+  onChange,
+}) {
   const isSpline = plankton.viewer === "spline";
 
   return (
@@ -58,11 +65,29 @@ function CompareSpecimenColumn({ plankton, side }) {
           </div>
         </div>
       </div>
+
+      <div className="compare-specimen-controls">
+        <PlanktonComparePicker
+          planktons={collection}
+          excludeIds={[plankton.id, otherId]}
+          onSelect={onChange}
+          variant="change"
+          placeholder="Search species…"
+          className="compare-specimen-picker"
+        />
+      </div>
     </article>
   );
 }
 
-export default function CompareScreen({ leftPlankton, rightPlankton, onBack }) {
+export default function CompareScreen({
+  leftPlankton,
+  rightPlankton,
+  collection,
+  onBack,
+  onChangePrimary,
+  onChangeComparison,
+}) {
   const rows = buildComparisonSummary(leftPlankton, rightPlankton);
 
   useEffect(() => {
@@ -94,8 +119,20 @@ export default function CompareScreen({ leftPlankton, rightPlankton, onBack }) {
         </header>
 
         <div className="compare-models">
-          <CompareSpecimenColumn plankton={leftPlankton} side="left" />
-          <CompareSpecimenColumn plankton={rightPlankton} side="right" />
+          <CompareSpecimenColumn
+            plankton={leftPlankton}
+            side="left"
+            collection={collection}
+            otherId={rightPlankton.id}
+            onChange={onChangePrimary}
+          />
+          <CompareSpecimenColumn
+            plankton={rightPlankton}
+            side="right"
+            collection={collection}
+            otherId={leftPlankton.id}
+            onChange={onChangeComparison}
+          />
         </div>
 
         <section

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { preloadSplineViewerAssets } from "./SplinePlanktonViewer";
-import { scanSpecimen } from "../data/scanSpecimen";
-
-const PROCESSING_MS = 3800;
+import { scanSpecimen, SCAN_PROCESSING_MS } from "../data/scanSpecimen";
 
 function ScanToggleIcon() {
   return (
@@ -29,14 +27,28 @@ function ScanToggleIcon() {
   );
 }
 
-export default function PlanktonScan({ onScanComplete, onExpandedChange, onScanPhaseChange }) {
+export default function PlanktonScan({
+  onScanComplete,
+  onExpandedChange,
+  onScanPhaseChange,
+  expanded: expandedProp,
+}) {
   const rootRef = useRef(null);
   const inputRef = useRef(null);
   const processingTimerRef = useRef(null);
   const previewUrlRef = useRef(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expandedInternal, setExpandedInternal] = useState(false);
+  const isControlled = expandedProp !== undefined;
+  const expanded = isControlled ? expandedProp : expandedInternal;
   const [phase, setPhase] = useState("idle");
   const [uploadPreview, setUploadPreview] = useState(null);
+
+  const setExpanded = (next) => {
+    if (!isControlled) {
+      setExpandedInternal(next);
+    }
+    onExpandedChange?.(next);
+  };
 
   useEffect(() => {
     return () => {
@@ -49,10 +61,6 @@ export default function PlanktonScan({ onScanComplete, onExpandedChange, onScanP
       }
     };
   }, []);
-
-  useEffect(() => {
-    onExpandedChange?.(expanded);
-  }, [expanded, onExpandedChange]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -135,7 +143,7 @@ export default function PlanktonScan({ onScanComplete, onExpandedChange, onScanP
       setUploadPreview(null);
       setPhase("idle");
       setExpanded(false);
-    }, PROCESSING_MS);
+    }, SCAN_PROCESSING_MS);
   };
 
   const onFileChange = (event) => {

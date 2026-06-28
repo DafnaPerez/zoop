@@ -15,7 +15,7 @@ export const scanSpecimen = {
     },
     {
       label: "Ecology",
-      text: "Known for bioluminescence: luciferid shrimps are named after their light-producing ability.",
+      text: "Known for distinctive bioluminescence: luciferid shrimps are named after their natural light-producing ability.",
     },
   ],
   viewer: "spline",
@@ -24,9 +24,11 @@ export const scanSpecimen = {
   scanZoomScale: 1.15,
   galleryZoomScale: 2.7,
   galleryOffsetX: -28,
-  detailZoomScale: 1.55,
+  detailZoomScale: 1.1,
+  compareZoomScale: 1.55,
   galleryImage: publicUrl("/gallery/belzebub-hanseni.png"),
   layout: { top: "12%", left: "8%", width: "18%", zIndex: 2 },
 };
 
 export const SCAN_ACCURACY = 100;
+export const SCAN_PROCESSING_MS = 3800;

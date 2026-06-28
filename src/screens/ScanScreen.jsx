@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BlueprintScaffold } from "../components/BlueprintScaffold";
 import { SCAN_ACCURACY, scanSpecimen } from "../data/scanSpecimen";
 
@@ -8,12 +8,15 @@ const INTRO_MS = 7000;
 export default function ScanScreen({
   uploadPreview,
   onClose,
+  onRescanFile,
+  scanProcessing = false,
   onAddToCollection,
   isInCollection,
   handoffActive = false,
   scanStageRef,
   handoffShellRef,
 }) {
+  const rescanInputRef = useRef(null);
   const [accuracyFill, setAccuracyFill] = useState(0);
   const [introComplete, setIntroComplete] = useState(false);
 
@@ -41,6 +44,16 @@ export default function ScanScreen({
 
   const handleAdd = () => {
     onAddToCollection();
+  };
+
+  const handleRescanPick = () => {
+    rescanInputRef.current?.click();
+  };
+
+  const handleRescanChange = (event) => {
+    const file = event.target.files?.[0];
+    if (file) onRescanFile(file);
+    event.target.value = "";
   };
 
   return (
@@ -131,19 +144,47 @@ export default function ScanScreen({
         <button
           type="button"
           className="scan-rescan-btn atlas-btn"
-          onClick={onClose}
+          onClick={handleRescanPick}
+          disabled={scanProcessing || handoffActive}
         >
           Scan another
         </button>
+        <input
+          ref={rescanInputRef}
+          type="file"
+          accept="image/*"
+          className="scan-file-input"
+          onChange={handleRescanChange}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
         <button
           type="button"
           className="scan-add-btn atlas-btn"
           onClick={handleAdd}
-          disabled={isInCollection}
+          disabled={isInCollection || scanProcessing}
         >
           {isInCollection ? "Added to collection" : "Add to collection →"}
         </button>
       </footer>
+
+      {scanProcessing ? (
+        <div className="scan-rescan-overlay" role="status" aria-live="polite">
+          <div className="scan-processing-stage">
+            {uploadPreview ? (
+              <img
+                src={uploadPreview}
+                alt="Uploaded scan preview"
+                className="scan-upload-preview"
+              />
+            ) : null}
+            <p className="scan-processing-label">Analyzing scan…</p>
+            <div className="scan-processing-bar" aria-hidden="true">
+              <span className="scan-processing-bar-fill" />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

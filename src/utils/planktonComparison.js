@@ -37,7 +37,7 @@ export function buildComparisonTable(left, right) {
   }));
 }
 
-const SUMMARY_LABELS = new Set(["Taxonomy", "Habitat", "Depth", "Size"]);
+const SUMMARY_LABELS = new Set(["Taxonomy", "Habitat", "Size"]);
 
 export function buildComparisonSummary(left, right) {
   return buildComparisonTable(left, right).filter((row) => SUMMARY_LABELS.has(row.label));

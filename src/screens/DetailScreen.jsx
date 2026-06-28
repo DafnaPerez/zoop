@@ -1,16 +1,25 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { BlueprintFrame, BlueprintScaffold } from "../components/BlueprintScaffold";
+import DetailHotspots from "../components/DetailHotspots";
+import DetailSketchCallout from "../components/DetailSketchCallout";
 import DetailSpecimenScale from "../components/DetailSpecimenScale";
 import PlanktonComparePicker from "../components/PlanktonComparePicker";
 import PlanktonModel from "../components/PlanktonModel";
-import SplinePlanktonViewer from "../components/SplinePlanktonViewer";
+import SplinePlanktonViewer, {
+  focusSplineHotspotOnHost,
+} from "../components/SplinePlanktonViewer";
 import { getPlanktonSplineZoomScale } from "../utils/planktonSplineZoom";
+
+function getHotspotForSketch(hotspots, sketchIndex) {
+  return hotspots.find((spot) => spot.sketchIndex === sketchIndex) ?? null;
+}
 
 function getSketchSlots(plankton) {
   return (plankton.sketches ?? []).map((image, index) => ({
     image,
     imageAlign: index === 0 ? "right" : "left",
+    objectPosition: plankton.sketchObjectPositions?.[index],
     alt: `${plankton.name} sketch ${index + 1}`,
   }));
 }
@@ -28,6 +37,27 @@ export default function DetailScreen({
   onCompare,
 }) {
   const isSpline = plankton.viewer === "spline";
+  const hotspots = plankton.detailHotspots ?? [];
+  const [hoverHotspotId, setHoverHotspotId] = useState(null);
+  const [focusedHotspotId, setFocusedHotspotId] = useState(null);
+  const modelHostRef = useRef(null);
+
+  const hoveredHotspot = hotspots.find((spot) => spot.id === hoverHotspotId) ?? null;
+  const highlightedSketchIndex = hoveredHotspot?.sketchIndex ?? null;
+
+  function handleSketchFocus(hotspot) {
+    if (!hotspot) return;
+
+    setFocusedHotspotId(hotspot.id);
+    if (isSpline) {
+      focusSplineHotspotOnHost(modelHostRef.current, hotspot);
+    }
+  }
+
+  useEffect(() => {
+    setHoverHotspotId(null);
+    setFocusedHotspotId(null);
+  }, [plankton.id]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -115,8 +145,13 @@ export default function DetailScreen({
             <BlueprintFrame label="LIVE SPECIMEN" />
             <div className="detail-model-glow" aria-hidden="true" />
 
-            <div className="detail-model-float">
+            <div
+              className={`detail-model-float${
+                hotspots.length ? " detail-model-float--hotspots" : ""
+              }`}
+            >
               <div
+                ref={modelHostRef}
                 className="detail-model-viewport"
                 style={
                   plankton.detailOffsetX != null || plankton.detailOffsetY != null
@@ -153,6 +188,14 @@ export default function DetailScreen({
                   </Suspense>
                 </Canvas>
               )}
+              <DetailHotspots
+                hotspots={hotspots}
+                viewerHostRef={modelHostRef}
+                calloutId={hoverHotspotId}
+                focusedId={focusedHotspotId}
+                onHoverStart={setHoverHotspotId}
+                onHoverEnd={() => setHoverHotspotId(null)}
+              />
               </div>
             </div>
           </div>
@@ -162,22 +205,55 @@ export default function DetailScreen({
 
         <aside className="detail-sidebar detail-sidebar--right detail-reveal detail-reveal--3">
           <div className="detail-sketch-stack">
-            {getSketchSlots(plankton).map((slot) => (
+            {getSketchSlots(plankton).map((slot, index) => {
+              const hotspot = getHotspotForSketch(hotspots, index);
+              const isHighlighted = highlightedSketchIndex === index;
+
+              return (
               <div
                 key={slot.image}
-                className="detail-media-card detail-media-card--large detail-media-card--image"
+                className={`detail-media-card detail-media-card--large detail-media-card--image${
+                  hotspot ? " detail-media-card--focusable" : ""
+                }${isHighlighted ? " detail-media-card--highlighted" : ""}`}
+                role={hotspot ? "button" : undefined}
+                tabIndex={hotspot ? 0 : undefined}
+                onClick={() => handleSketchFocus(hotspot)}
+                onKeyDown={(event) => {
+                  if (!hotspot) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleSketchFocus(hotspot);
+                  }
+                }}
+                onMouseEnter={() => hotspot && setHoverHotspotId(hotspot.id)}
+                onMouseLeave={() => setHoverHotspotId(null)}
               >
                 <img
                   src={slot.image}
                   alt={slot.alt}
-                  className={`detail-media-card-image detail-media-card-image--${slot.imageAlign}`}
+                  className={`detail-media-card-image${
+                    slot.objectPosition
+                      ? ""
+                      : ` detail-media-card-image--${slot.imageAlign}`
+                  }`}
+                  style={
+                    slot.objectPosition
+                      ? { objectPosition: slot.objectPosition }
+                      : undefined
+                  }
                 />
+                <DetailSketchCallout hotspot={hotspot} visible={isHighlighted} />
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {plankton.scaleMaxMm ? (
-            <DetailSpecimenScale maxMm={plankton.scaleMaxMm} />
+            <DetailSpecimenScale
+              maxMm={plankton.scaleMaxMm}
+              viewerHostRef={isSpline ? modelHostRef : null}
+              trackZoom={isSpline}
+            />
           ) : null}
         </aside>
       </div>

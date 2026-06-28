@@ -8,14 +8,14 @@ export default function PlanktonGalleryImage({
   className = "",
 }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const ringDistance = Math.abs(offset);
-  const floatPhase = ringDistance * 0.9;
+  const ringIndex = Math.min(Math.abs(offset), 2);
   const imageScale = plankton.galleryImageScale ?? 1;
 
   const classes = [
     "plankton-visual",
     "plankton-visual--gallery-image",
     float ? "plankton-visual--float" : "",
+    float ? `plankton-visual--float-ring-${ringIndex}` : "",
     imageFailed ? "plankton-visual--placeholder" : "",
     className,
   ]
@@ -27,14 +27,7 @@ export default function PlanktonGalleryImage({
   }
 
   return (
-    <div
-      className={classes}
-      style={
-        float
-          ? { animationDelay: `${floatPhase}s` }
-          : undefined
-      }
-    >
+    <div className={classes}>
       <img
         src={getPlanktonGalleryImage(plankton)}
         alt=""
